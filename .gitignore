@@ -1,0 +1,10 @@
+node_modules
+artifacts
+cache
+coverage
+coverage.json
+.env
+typechain-types
+typechain
+data/abi
+deployments/hardhat
