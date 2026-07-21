@@ -295,6 +295,11 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         require(newPrincipal >= newPlan.minDeposit, "New principal below minimum");
         require(newPlan.maxDeposit == 0 || newPrincipal <= newPlan.maxDeposit, "New principal exceeds maximum");
 
+        // Register interest as tracked deposit in vault (virtual — tokens already in vault)
+        if (interest > 0) {
+            vaultManager.depositToVault(interest);
+        }
+
         // Mark old deposit as renewed
         oldDep.status = DepositStatus.ManualRenewed;
         _burn(depositId);
@@ -332,6 +337,7 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
     function autoRenewDeposit(uint256 depositId) external whenNotPaused nonReentrant returns (uint256) {
         require(depositId < depositCount, "Deposit does not exist");
         Deposit storage oldDep = deposits[depositId];
+        require(oldDep.owner == msg.sender, "Not your deposit");
         require(oldDep.status == DepositStatus.Active, "Not active");
 
         uint256 gracePeriodEnd = oldDep.maturityAt + (GRACE_PERIOD_DAYS * 1 days);
@@ -343,6 +349,11 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
 
         // Same plan, same APR, same penalty (snapshots from original)
         Plan storage currentPlan = plans[oldDep.planId];
+
+        // Register interest as tracked deposit in vault (virtual — tokens already in vault)
+        if (interest > 0) {
+            vaultManager.depositToVault(interest);
+        }
 
         // Mark old deposit as auto-renewed
         oldDep.status = DepositStatus.AutoRenewed;
