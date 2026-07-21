@@ -21,7 +21,7 @@
 |---|---|---|
 | Day 1 | Setup + MockUSDC | ✅ Hoàn thành |
 | Day 2 | VaultManager + SavingCore | ✅ Hoàn thành |
-| Day 3 | Test Suite cơ bản | ⏳ Chờ |
+| Day 3 | Test Suite cơ bản | ✅ Hoàn thành |
 | Day 4 | Test Coverage > 90% | ⏳ Chờ |
 | Day 5 | React Frontend (MetaMask) | ⏳ Chờ |
 | Day 6 | README + Design Answers | ⏳ Chờ |
@@ -111,19 +111,26 @@ project/
 
 ---
 
-## Day 3 — Test Suite Cơ Bản ⏳
-**Trạng thái:** Chờ
+## Day 3 — Test Suite Comprehensive ✅
+**Trạng thái:** Hoàn thành
 
 ### Mục tiêu
-- [ ] Viết test cases cho 5 luồng bắt buộc:
+- [x] Viết test cases cho 5 luồng bắt buộc:
   1. openDeposit → withdrawAtMaturity
   2. openDeposit → earlyWithdraw
   3. openDeposit → renewDeposit
   4. openDeposit → autoRenewDeposit
   5. Edge cases (amount < min, plan disabled, insufficient vault)
-- [ ] Test ERC721 NFT minting + ownership
-- [ ] Test access control (admin vs user)
-- [ ] Test pause/unpause behavior
+- [x] Test ERC721 NFT minting + ownership + metadata
+- [x] Test access control (admin vs user) — 8 tests
+- [x] Test pause/unpause behavior — 5 tests
+- [x] Boundary conditions (maturityAt exact, grace period exact)
+- [x] Integration tests (full lifecycle 4 scenarios)
+- [x] Plan validation (8 tests)
+- [x] Interest calculation (5 scenarios)
+- [x] Non-existent resources (4 tests)
+
+### Kết quả: 129 tests — all passing
 
 ---
 
