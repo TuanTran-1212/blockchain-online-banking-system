@@ -65,8 +65,17 @@ Interest formula: `interest = (principal * aprBps * tenorSeconds) / (365 days * 
 | VaultManager | `0xE72739658F52527bF28507Adb0B6C4fdBD32626b` |
 | SavingCore | `0x25FbbB97ccaFe4E4BE1dCE89988c170E721A9947` |
 
+## Frontend
+
+Separate package in `frontend/` — React 19 + Vite 8 + TypeScript + ethers.js. Has its own `package.json` and `node_modules/`.
+
+```bash
+cd frontend && npm run dev      # Vite dev server
+cd frontend && npm run build    # tsc + vite build
+cd frontend && npm run lint     # oxlint
+```
+
 ## Known Limitations
 
 - No burn on MockUSDC
 - No CI/CD pipelines
-- No frontend yet (planned React + Vite)

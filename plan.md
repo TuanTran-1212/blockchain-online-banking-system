@@ -1,4 +1,4 @@
-# 📋 Online Banking System — Kế Hoạch 7 Ngày
+# 📋 Online Banking System — Kế Hoạch
 
 ## Thông Tin Dự Án
 - **MSSV:** 2231200077
@@ -21,11 +21,11 @@
 |---|---|---|
 | Day 1 | Setup + MockUSDC | ✅ Hoàn thành |
 | Day 2 | VaultManager + SavingCore | ✅ Hoàn thành |
-| Day 3 | Test Suite cơ bản | ✅ Hoàn thành |
-| Day 4 | Test Coverage > 90% | ⏳ Chờ |
-| Day 5 | React Frontend (MetaMask) | ⏳ Chờ |
-| Day 6 | README + Design Answers | ⏳ Chờ |
-| Day 7 | Final Polish + Deploy | ⏳ Chờ |
+| Day 3 | Test Suite (129 tests) | ✅ Hoàn thành |
+| Day 4 | Test Coverage + Frontend | ✅ Hoàn thành |
+| Day 5 | Challenges | ⏳ Chờ |
+| Day 6 | Design Answers + README | ⏳ Chờ |
+| Day Final | Deploy + Verify + Report | ⏳ Chờ |
 
 ---
 
@@ -38,11 +38,6 @@
 - [x] Viết MockUSDC.sol (ERC20, 6 decimals, owner-mintable)
 - [x] Deploy script + test cases
 - [x] Deploy lên Sepolia testnet
-
-### Kết quả Deploy
-| Contract | Address | Tx |
-|---|---|---|
-| MockUSDC | `0x862b80A643f3ec8067Bd3653Ba2D2c737019bddA` | `0x7e64c9e8...` |
 
 ### Files đã tạo
 ```
@@ -68,46 +63,6 @@ project/
 - [x] Deploy script cho cả 2 contract
 - [x] Test cases cho VaultManager (14 tests) và SavingCore (27 tests)
 - [x] Deploy lên Sepolia testnet ✅
-- [x] Tạo báo cáo DAY2.md
-
-### VaultManager.sol — Contract Quản Lý Quỹ
-| Chức năng | Mô tả |
-|---|---|
-| `fund(amount)` | Owner nạp USDC vào vault |
-| `withdraw(amount)` | Owner rút USDC từ vault |
-| `depositToVault(amount)` | Ghi nhận người dùng nạp tiền |
-| `withdrawFromVault(amount)` | Rút tiền cho người dùng + transfer |
-| `isSolvent()` | Kiểm tra vault đủ tiền |
-| `vaultBalance()` | Số dư USDC thực tế |
-| `pause()` / `unpause()` | Tạm dừng/mở lại hệ thống |
-
-### SavingCore.sol — Contract Logic Nghiệp Vụ
-| Chức năng | Mô tả |
-|---|---|
-| `createPlan(...)` | Tạo plan mới (admin) |
-| `updatePlan(planId, aprBps)` | Cập nhật APR (admin) |
-| `enablePlan(planId)` / `disablePlan(planId)` | Bật/tắt plan |
-| `openDeposit(planId, amount)` | Mở tiết kiệm + mint NFT |
-| `withdrawAtMaturity(depositId)` | Rút khi đáo hạn (lãi đơn) |
-| `earlyWithdraw(depositId)` | Rút sớm (0 lãi, phạt 650 bps) |
-| `renewDeposit(depositId, newPlanId)` | Tái tục thủ công |
-| `autoRenewDeposit(depositId)` | Tái tục tự động (sau 3 ngày grace) |
-
-### Công Thức Tính Lãi
-```
-interest = (principal × aprBpsAtOpen × tenorSeconds) / (365 days × 10000)
-```
-
-### Files sẽ tạo
-```
-project/
-├── contracts/VaultManager.sol
-├── contracts/SavingCore.sol
-├── deploy/2-deploy.ts
-├── test/VaultManager.test.ts
-├── test/SavingCore.test.ts
-└── reports/DAY2.md
-```
 
 ---
 
@@ -115,51 +70,46 @@ project/
 **Trạng thái:** Hoàn thành
 
 ### Mục tiêu
-- [x] Viết test cases cho 5 luồng bắt buộc:
-  1. openDeposit → withdrawAtMaturity
-  2. openDeposit → earlyWithdraw
-  3. openDeposit → renewDeposit
-  4. openDeposit → autoRenewDeposit
-  5. Edge cases (amount < min, plan disabled, insufficient vault)
+- [x] Viết test cases cho 5 luồng bắt buộc
 - [x] Test ERC721 NFT minting + ownership + metadata
-- [x] Test access control (admin vs user) — 8 tests
-- [x] Test pause/unpause behavior — 5 tests
-- [x] Boundary conditions (maturityAt exact, grace period exact)
+- [x] Test access control, pause/unpause, boundary conditions
 - [x] Integration tests (full lifecycle 4 scenarios)
-- [x] Plan validation (8 tests)
-- [x] Interest calculation (5 scenarios)
-- [x] Non-existent resources (4 tests)
 
 ### Kết quả: 129 tests — all passing
 
 ---
 
-## Day 4 — Test Coverage > 90% ⏳
-**Trạng thái:** Chờ
+## Day 4 — Test Coverage + React Frontend ✅
+**Trạng thái:** Hoàn thành
 
-### Mục tiêu
-- [ ] Chạy `npx hardhat coverage`
-- [ ] Đảm bảo >90% line coverage
-- [ ] Thêm test cases cho các phần chưa cover
-- [ ] Test interest calculation精度
-- [ ] Test boundary conditions (boundary times, rounding)
+### Coverage
+- [x] Chạy `npx hardhat coverage`
+- [x] 100% statements/functions/lines, 88.76% branch
+- [x] Thêm 31 test cases → 160 tests total
 
----
-
-## Day 5 — React Frontend ⏳
-**Trạng thái:** Chờ
-
-### Mục tiêu
-- [ ] Setup Vite + React + TypeScript
-- [ ] MetaMask wallet connection
-- [ ] Pages:
-  - Home: Xem thông tin contracts
-  - Open Deposit: Chọn plan, nhập số tiền, mint NFT
-  - My Deposits: Danh sách deposit + rút/tái tục
+### React Frontend
+- [x] Setup Vite + React + TypeScript + ethers.js
+- [x] MetaMask wallet connection (useWallet hook)
+- [x] Home page: Plans list + vault balance
+- [x] Open Deposit page: Select plan, approve, open deposit
+- [x] My Deposits page: List deposits, withdraw, renew
+- [x] Build pass, production bundle generated
 
 ---
 
-## Day 6 — README + Design Answers ⏳
+## Day 5 — Challenges ⏳
+**Trạng thái:** Chờ
+
+### Mục tiêu
+- [ ] Phân tích 5 challenges (C1-C5)
+- [ ] Lựa chọn 1-2 challenges phù hợp
+- [ ] Implement trong Solidity
+- [ ] Viết test cases cho challenges
+- [ ] Deploy lại nếu có thay đổi contract
+
+---
+
+## Day 6 — Design Answers + README ⏳
 **Trạng thái:** Chờ
 
 ### Mục tiêu
@@ -175,7 +125,7 @@ project/
 
 ---
 
-## Day 7 — Final Polish + Deploy ⏳
+## Day Final — Deploy + Verify + Report ⏳
 **Trạng thái:** Chờ
 
 ### Mục tiêu
@@ -183,7 +133,7 @@ project/
 - [ ] Deploy tất cả contracts lên Sepolia
 - [ ] Verify contracts trên Etherscan
 - [ ] Kiểm tra lại coverage
-- [ ] Hoàn thiện báo cáo
+- [ ] Hoàn thiện báo cáo cuối cùng
 
 ---
 
