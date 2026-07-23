@@ -22,6 +22,7 @@ export default function MyDeposits({ provider, signer, address, isCorrectNetwork
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(false);
   const [txStatus, setTxStatus] = useState<{ id: number; status: string; message: string } | null>(null);
+  const [renewPlanId, setRenewPlanId] = useState<{ [depositId: number]: number }>({});
 
   const loadData = useCallback(async () => {
     if (!provider || !address || !isCorrectNetwork) return;
@@ -49,7 +50,7 @@ export default function MyDeposits({ provider, signer, address, isCorrectNetwork
     try {
       setTxStatus({ id: depositId, status: "withdrawing", message: "Withdrawing..." });
       const core = getSavingCore(signer);
-      const tx = await core.withdrawDeposit(depositId);
+      const tx = await core.withdrawAtMaturity(depositId);
       await tx.wait();
       setTxStatus({ id: depositId, status: "success", message: "Withdrawn successfully!" });
       loadData();
@@ -60,10 +61,11 @@ export default function MyDeposits({ provider, signer, address, isCorrectNetwork
 
   const handleRenew = async (depositId: number) => {
     if (!signer) return;
+    const newPlanId = renewPlanId[depositId] ?? 0;
     try {
       setTxStatus({ id: depositId, status: "renewing", message: "Renewing..." });
       const core = getSavingCore(signer);
-      const tx = await core.renewDeposit(depositId);
+      const tx = await core.renewDeposit(depositId, newPlanId);
       await tx.wait();
       setTxStatus({ id: depositId, status: "success", message: "Renewed successfully!" });
       loadData();
@@ -77,7 +79,7 @@ export default function MyDeposits({ provider, signer, address, isCorrectNetwork
     try {
       setTxStatus({ id: depositId, status: "withdrawing", message: "Early withdrawing..." });
       const core = getSavingCore(signer);
-      const tx = await core.withdrawBeforeMaturity(depositId);
+      const tx = await core.earlyWithdraw(depositId);
       await tx.wait();
       setTxStatus({ id: depositId, status: "success", message: "Early withdrawal completed!" });
       loadData();
@@ -159,6 +161,16 @@ export default function MyDeposits({ provider, signer, address, isCorrectNetwork
                         <button className="btn-primary" onClick={() => handleWithdraw(d.id)}>
                           Withdraw
                         </button>
+                        <select
+                          value={renewPlanId[d.id] ?? 0}
+                          onChange={(e) => setRenewPlanId({ ...renewPlanId, [d.id]: Number(e.target.value) })}
+                        >
+                          {plans.filter(p => p.enabled).map(p => (
+                            <option key={p.id} value={p.id}>
+                              Plan #{p.id} — {p.tenorDays}d, {(p.aprBps / 100).toFixed(2)}%
+                            </option>
+                          ))}
+                        </select>
                         <button className="btn-secondary" onClick={() => handleRenew(d.id)}>
                           Renew
                         </button>

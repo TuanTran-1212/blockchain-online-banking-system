@@ -8,7 +8,9 @@
     "deploy": "hardhat deploy",
     "deploy:sepolia": "hardhat deploy --network sepolia",
     "run:sepolia": "hardhat run --network sepolia",
-    "coverage": "hardhat coverage"
+    "coverage": "hardhat coverage",
+    "demo:setup": "hardhat run --network sepolia scripts/demo-setup.ts",
+    "demo:check": "hardhat run --network sepolia scripts/check-status.ts"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.1.0"

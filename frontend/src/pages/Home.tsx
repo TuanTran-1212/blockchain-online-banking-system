@@ -11,15 +11,26 @@ interface Props {
 export default function Home({ provider, address, isCorrectNetwork }: Props) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [vaultBalance, setVaultBalance] = useState<string>("0");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!provider || !isCorrectNetwork) return;
+    setLoading(true);
+    setError(null);
     (async () => {
-      const p = await fetchPlans(provider);
-      setPlans(p);
-      const vm = getVaultManager(provider);
-      const bal = await vm.vaultBalance();
-      setVaultBalance(formatUSDC(bal));
+      try {
+        const p = await fetchPlans(provider);
+        setPlans(p);
+        const vm = getVaultManager(provider);
+        const bal = await vm.vaultBalance();
+        setVaultBalance(formatUSDC(bal));
+      } catch (err: any) {
+        console.error("Failed to load data:", err);
+        setError(err?.message || "Failed to load blockchain data");
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [provider, isCorrectNetwork]);
 
@@ -35,8 +46,15 @@ export default function Home({ provider, address, isCorrectNetwork }: Props) {
   return (
     <div className="page">
       <h2>Deposit Plans</h2>
+
+      {error && (
+        <div className="status-message error" style={{ marginBottom: "1rem" }}>
+          {error}
+        </div>
+      )}
+
       <div className="info-box">
-        <strong>Vault Balance:</strong> {Number(vaultBalance).toLocaleString()} USDC
+        <strong>Vault Balance:</strong> {loading ? "Loading..." : `${Number(vaultBalance).toLocaleString()} USDC`}
       </div>
 
       <div className="plans-grid">
@@ -70,7 +88,7 @@ export default function Home({ provider, address, isCorrectNetwork }: Props) {
         ))}
       </div>
 
-      {plans.filter(pl => pl.enabled).length === 0 && (
+      {plans.filter(pl => pl.enabled).length === 0 && !loading && (
         <p className="empty-state">No active plans available.</p>
       )}
 
