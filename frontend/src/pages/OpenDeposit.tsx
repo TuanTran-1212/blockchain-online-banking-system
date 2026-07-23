@@ -7,7 +7,6 @@ import {
   parseUSDC,
   getMockUSDC,
   getSavingCore,
-  DECIMALS,
 } from "../config/contracts";
 
 interface Props {
@@ -43,7 +42,7 @@ export default function OpenDeposit({ provider, signer, address, isCorrectNetwor
       setMessage(`Minimum deposit is ${formatUSDC(plan.minDeposit)} USDC`);
       return;
     }
-    if (depositAmount > plan.maxDeposit) {
+    if (plan.maxDeposit !== 0n && depositAmount > plan.maxDeposit) {
       setStatus("error");
       setMessage(`Maximum deposit is ${formatUSDC(plan.maxDeposit)} USDC`);
       return;
@@ -118,7 +117,10 @@ export default function OpenDeposit({ provider, signer, address, isCorrectNetwor
           <div className="hint">
             Min: {formatUSDC(enabledPlans.find((p) => p.id === selectedPlan)?.minDeposit || 0n)} USDC
             {" | Max: "}
-            {formatUSDC(enabledPlans.find((p) => p.id === selectedPlan)?.maxDeposit || 0n)} USDC
+            {(() => {
+              const plan = enabledPlans.find((p) => p.id === selectedPlan);
+              return plan && plan.maxDeposit !== 0n ? `${formatUSDC(plan.maxDeposit)} USDC` : "Unlimited";
+            })()}
           </div>
         )}
       </div>

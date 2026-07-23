@@ -81,6 +81,7 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
     event DepositEarlyWithdrawn(uint256 indexed depositId, uint256 principal, uint256 penalty);
     event DepositRenewed(uint256 indexed oldDepositId, uint256 indexed newDepositId, uint256 newPrincipal);
     event FeeReceiverUpdated(address oldReceiver, address newReceiver);
+    event DepositPartialEarlyWithdrawn(uint256 indexed depositId, uint256 withdrawAmount, uint256 penalty);
 
     // ========================
     // Constructor
@@ -202,6 +203,12 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         usdc.safeTransferFrom(msg.sender, address(vaultManager), amount);
         vaultManager.depositToVault(amount);
 
+        // C2: Record expected interest obligation in vault
+        uint256 expectedInterest = calculateInterest(amount, plan.aprBps, plan.tenorDays * 1 days);
+        if (expectedInterest > 0) {
+            vaultManager.recordInterestOwed(expectedInterest);
+        }
+
         // Mint ERC721 NFT certificate
         _mint(msg.sender, depositId);
         _tokenURIs[depositId] = "";
@@ -224,6 +231,11 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
 
         // Calculate simple interest
         uint256 interest = calculateInterest(dep.principal, dep.aprBpsAtOpen, dep.maturityAt - dep.startAt);
+
+        // C2: Release interest obligation
+        if (interest > 0) {
+            vaultManager.releaseInterestOwed(interest);
+        }
 
         // Withdraw principal from tracked deposits, interest from vault reserves
         vaultManager.withdrawFromVault(msg.sender, dep.principal);
@@ -250,6 +262,12 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         require(dep.owner == msg.sender, "Not your deposit");
         require(dep.status == DepositStatus.Active, "Not active");
 
+        // C2: Release interest obligation (no interest paid on early withdraw)
+        uint256 expectedInterest = calculateInterest(dep.principal, dep.aprBpsAtOpen, dep.maturityAt - dep.startAt);
+        if (expectedInterest > 0) {
+            vaultManager.releaseInterestOwed(expectedInterest);
+        }
+
         // Calculate penalty: principal * penaltyBps / 10000
         uint256 penalty = (dep.principal * dep.penaltyBpsAtOpen) / BPS_DENOMINATOR;
 
@@ -267,6 +285,45 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         _burn(depositId);
 
         emit DepositEarlyWithdrawn(depositId, dep.principal, penalty);
+    }
+
+    /**
+     * C3: Partial Early Withdrawal — Withdraw part of principal before maturity
+     *      Penalty applies only to the withdrawn portion
+     *      Remaining principal keeps earning interest
+     * @param depositId The deposit to partially withdraw
+     * @param withdrawAmount Amount of principal to withdraw
+     */
+    function partialEarlyWithdraw(uint256 depositId, uint256 withdrawAmount) external whenNotPaused nonReentrant {
+        require(depositId < depositCount, "Deposit does not exist");
+        Deposit storage dep = deposits[depositId];
+        require(dep.owner == msg.sender, "Not your deposit");
+        require(dep.status == DepositStatus.Active, "Not active");
+        require(withdrawAmount > 0 && withdrawAmount <= dep.principal, "Invalid withdraw amount");
+
+        // Penalty on withdrawn amount only
+        uint256 penalty = (withdrawAmount * dep.penaltyBpsAtOpen) / BPS_DENOMINATOR;
+        uint256 userPayout = withdrawAmount - penalty;
+
+        if (penalty > 0) {
+            vaultManager.withdrawFromVault(feeReceiver, penalty);
+        }
+        vaultManager.withdrawFromVault(msg.sender, userPayout);
+
+        // C2: Release interest obligation for the withdrawn portion
+        uint256 releasedInterest = calculateInterest(withdrawAmount, dep.aprBpsAtOpen, dep.maturityAt - dep.startAt);
+        vaultManager.releaseInterestOwed(releasedInterest);
+
+        // Update deposit principal
+        dep.principal -= withdrawAmount;
+
+        // If fully withdrawn, mark as Withdrawn and burn NFT
+        if (dep.principal == 0) {
+            dep.status = DepositStatus.Withdrawn;
+            _burn(depositId);
+        }
+
+        emit DepositPartialEarlyWithdrawn(depositId, withdrawAmount, penalty);
     }
 
     /**
@@ -289,6 +346,11 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         // Calculate interest from old deposit
         uint256 interest = calculateInterest(oldDep.principal, oldDep.aprBpsAtOpen, oldDep.maturityAt - oldDep.startAt);
         uint256 newPrincipal = oldDep.principal + interest;
+
+        // C2: Release old interest obligation
+        if (interest > 0) {
+            vaultManager.releaseInterestOwed(interest);
+        }
 
         // Check new plan constraints
         Plan storage newPlan = plans[newPlanId];
@@ -320,6 +382,13 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         });
         depositCount++;
 
+        // C2: Record new interest obligation
+        uint256 newTenorSeconds = newPlan.tenorDays * 1 days;
+        uint256 newExpectedInterest = calculateInterest(newPrincipal, newPlan.aprBps, newTenorSeconds);
+        if (newExpectedInterest > 0) {
+            vaultManager.recordInterestOwed(newExpectedInterest);
+        }
+
         // Mint new NFT
         _mint(msg.sender, newDepositId);
 
@@ -346,6 +415,11 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         // Calculate interest from old deposit
         uint256 interest = calculateInterest(oldDep.principal, oldDep.aprBpsAtOpen, oldDep.maturityAt - oldDep.startAt);
         uint256 newPrincipal = oldDep.principal + interest;
+
+        // C2: Release old interest obligation
+        if (interest > 0) {
+            vaultManager.releaseInterestOwed(interest);
+        }
 
         // Same plan, same APR, same penalty (snapshots from original)
         Plan storage currentPlan = plans[oldDep.planId];
@@ -374,6 +448,13 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
             status: DepositStatus.Active
         });
         depositCount++;
+
+        // C2: Record new interest obligation (keeps original APR)
+        uint256 newTenorSeconds = currentPlan.tenorDays * 1 days;
+        uint256 newExpectedInterest = calculateInterest(newPrincipal, oldDep.aprBpsAtOpen, newTenorSeconds);
+        if (newExpectedInterest > 0) {
+            vaultManager.recordInterestOwed(newExpectedInterest);
+        }
 
         // Mint new NFT for original owner
         _mint(oldDep.owner, newDepositId);

@@ -22,8 +22,8 @@
 | Day 1 | Setup + MockUSDC | ✅ Hoàn thành |
 | Day 2 | VaultManager + SavingCore | ✅ Hoàn thành |
 | Day 3 | Test Suite (129 tests) | ✅ Hoàn thành |
-| Day 4 | Test Coverage + Frontend | ✅ Hoàn thành |
-| Day 5 | Challenges | ⏳ Chờ |
+| Day 4 | Test Coverage (95.51%) + Frontend | ✅ Hoàn thành |
+| Day 5 | Challenges (C2 + C3) | ✅ Hoàn thành |
 | Day 6 | Design Answers + README | ⏳ Chờ |
 | Day Final | Deploy + Verify + Report | ⏳ Chờ |
 
@@ -84,8 +84,10 @@ project/
 
 ### Coverage
 - [x] Chạy `npx hardhat coverage`
-- [x] 100% statements/functions/lines, 88.76% branch
+- [x] 100% statements/functions/lines, 88.76% branch (ban đầu)
 - [x] Thêm 31 test cases → 160 tests total
+- [x] Fix branch coverage: thêm 21 tests mới → 181 tests total
+- [x] Branch coverage: **88.76% → 95.51%** (đạt yêu cầu > 90%)
 
 ### React Frontend
 - [x] Setup Vite + React + TypeScript + ethers.js
@@ -95,17 +97,45 @@ project/
 - [x] My Deposits page: List deposits, withdraw, renew
 - [x] Build pass, production bundle generated
 
+### Bug Fixes
+- [x] Frontend: maxDeposit=0 (unlimited) hiển thị "0.0 USDC" → fix hiển thị "Unlimited"
+- [x] Frontend: validation `depositAmount > plan.maxDeposit` sai khi maxDeposit=0 → fix check `maxDeposit !== 0n`
+- [x] Frontend: early withdraw gọi `withdrawBeforeMaturity()` → fix thành `earlyWithdraw()`
+
+### Documentation
+- [x] Tạo `architectureDesign.md` — mô tả toàn bộ hệ thống + visualize
+- [x] Tạo `README.md` (draft) — project overview + test coverage + deploy info
+- [x] Tạo scripts: create-plan.ts, fund-vault.ts, check-status.ts
+
 ---
 
-## Day 5 — Challenges ⏳
-**Trạng thái:** Chờ
+## Day 5 — Challenges (C2 + C3) ✅
+**Trạng thái:** Hoàn thành
 
 ### Mục tiêu
-- [ ] Phân tích 5 challenges (C1-C5)
-- [ ] Lựa chọn 1-2 challenges phù hợp
-- [ ] Implement trong Solidity
-- [ ] Viết test cases cho challenges
-- [ ] Deploy lại nếu có thay đổi contract
+- [x] Phân tích 5 challenges (C1-C5)
+- [x] Lựa chọn C2 (Solvency Guard) + C3 (Partial Early Withdrawal)
+- [x] Implement C2 trong VaultManager.sol + SavingCore.sol
+- [x] Implement C3 trong SavingCore.sol
+- [x] Viết test cases — 22 tests mới (Challenges.test.ts)
+- [x] Deploy lại lên Sepolia — tất cả contracts mới
+- [x] Cập nhật README.md — thêm challenges section
+- [x] Cập nhật architectureDesign.md
+- [x] Fix 6 frontend bugs (Home.tsx, MyDeposits.tsx, contracts.ts, etc.)
+- [x] Update scripts addresses + tạo demo-setup.ts
+- [x] Tạo reports/DAY5.md
+
+### Kết quả: 203 tests — all passing, Coverage 93.33% branch
+
+### C2: Solvency Guard
+- Thêm `totalOwedInterest` vào VaultManager
+- Block admin `withdraw()` nếu below interest obligations
+- SavingCore gọi `recordInterestOwed()` / `releaseInterestOwed()` ở mỗi flow
+
+### C3: Partial Early Withdrawal
+- Thêm `partialEarlyWithdraw(depositId, withdrawAmount)`
+- Penalty tính trên phần rút, phần còn lại giữ nguyên interest
+- Nếu rút hết → Withdrawn + burn NFT
 
 ---
 
@@ -141,9 +171,9 @@ project/
 
 | Contract | Network | Address | Deploy Tx |
 |---|---|---|---|
-| MockUSDC | Sepolia | `0x862b80A643f3ec8067Bd3653Ba2D2c737019bddA` | `0x7e64c9e8...` |
-| VaultManager | Sepolia | `0xE72739658F52527bF28507Adb0B6C4fdBD32626b` | `0xc6178a4a...` |
-| SavingCore | Sepolia | `0x25FbbB97ccaFe4E4BE1dCE89988c170E721A9947` | `0x81bc9aee...` |
+| MockUSDC | Sepolia | `0x45BAB50D9DFCE9176A64fA6Ce12Bb9288E2B5269` | `0x12b47f28...` |
+| VaultManager | Sepolia | `0x29b7e818Eaa803111788eFE924ff3682093CA3a8` | `0x5a2b1904...` |
+| SavingCore | Sepolia | `0x468864a15B76327f578d0dCb0E544D4C6A1aEC03` | `0x7b05e30d...` |
 
 ---
 

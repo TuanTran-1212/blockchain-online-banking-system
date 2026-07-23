@@ -13,15 +13,18 @@ Solidity 0.8.28, EVM target `cancun`. OpenZeppelin 5.1.
 ## Commands
 
 ```bash
+npm install --legacy-peer-deps   # root — peer deps conflict without this flag
 npm run compile              # hardhat compile → generates typechain-types/
 npm test                     # hardhat test (Mocha + Chai)
 npm run coverage             # solidity-coverage
-npm run deploy               # deploy to hardhat (default)
+npm run deploy               # deploy to hardhat (default network)
 npm run deploy:sepolia       # deploy to Sepolia (needs TESTNET_PRIVATE_KEY in .env)
 npm run run:sepolia          # hardhat run --network sepolia
+npm run demo:setup           # Sepolia: create plan + fund vault (scripts/demo-setup.ts)
+npm run demo:check           # Sepolia: check vault/deployer status
 ```
 
-No lint, format, or typecheck scripts are defined.
+No lint, format, or typecheck scripts are defined for the root package.
 
 ## Deploy Order
 
@@ -61,9 +64,9 @@ Interest formula: `interest = (principal * aprBps * tenorSeconds) / (365 days * 
 
 | Contract | Address |
 |---|---|
-| MockUSDC | `0x862b80A643f3ec8067Bd3653Ba2D2c737019bddA` |
-| VaultManager | `0xE72739658F52527bF28507Adb0B6C4fdBD32626b` |
-| SavingCore | `0x25FbbB97ccaFe4E4BE1dCE89988c170E721A9947` |
+| MockUSDC | `0x45BAB50D9DFCE9176A64fA6Ce12Bb9288E2B5269` |
+| VaultManager | `0x29b7e818Eaa803111788eFE924ff3682093CA3a8` |
+| SavingCore | `0x468864a15B76327f578d0dCb0E544D4C6A1aEC03` |
 
 ## Frontend
 

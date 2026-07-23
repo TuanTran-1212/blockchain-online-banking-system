@@ -13,6 +13,10 @@ const config: HardhatUserConfig = {
     version: "0.8.28",
     settings: {
       evmVersion: "cancun",
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
     },
   },
   networks: {

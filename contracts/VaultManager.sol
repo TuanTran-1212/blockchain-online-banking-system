@@ -20,12 +20,15 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable usdc;
-    uint256 public totalDeposits; // Sum of all user deposits tracked
+    uint256 public totalDeposits;     // Sum of all user deposits tracked
+    uint256 public totalOwedInterest; // Total interest owed to active deposits (C2: Solvency Guard)
 
     event VaultFunded(address indexed owner, uint256 amount);
     event VaultWithdrawn(address indexed owner, uint256 amount);
     event DepositRecorded(uint256 amount);
     event WithdrawalRecorded(uint256 amount);
+    event InterestOwedRecorded(uint256 amount);
+    event InterestOwedReleased(uint256 amount);
     event PausedByOwner();
     event UnpausedByOwner();
 
@@ -55,7 +58,7 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
     function withdraw(uint256 amount) external onlyOwner nonReentrant {
         require(amount > 0, "Amount must be > 0");
         require(
-            usdc.balanceOf(address(this)) - totalDeposits >= amount,
+            usdc.balanceOf(address(this)) - totalDeposits - totalOwedInterest >= amount,
             "Insufficient free balance"
         );
         usdc.safeTransfer(msg.sender, amount);
@@ -109,6 +112,31 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
     }
 
     // ========================
+    // Interest Owed Tracking (C2: Solvency Guard)
+    // ========================
+
+    /**
+     * @dev Called by SavingCore when a deposit is opened
+     *      Records the expected interest obligation
+     * @param amount Expected interest for the deposit
+     */
+    function recordInterestOwed(uint256 amount) external {
+        totalOwedInterest += amount;
+        emit InterestOwedRecorded(amount);
+    }
+
+    /**
+     * @dev Called by SavingCore when a deposit is settled (withdrawn, renewed, etc.)
+     *      Releases the interest obligation
+     * @param amount Interest obligation to release
+     */
+    function releaseInterestOwed(uint256 amount) external {
+        require(totalOwedInterest >= amount, "Invalid release amount");
+        totalOwedInterest -= amount;
+        emit InterestOwedReleased(amount);
+    }
+
+    // ========================
     // Pause / Unpause
     // ========================
 
@@ -134,17 +162,17 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Vault is solvent if actual balance >= total tracked deposits
+     * @dev Vault is solvent if actual balance >= total tracked deposits + owed interest
      */
     function isSolvent() external view returns (bool) {
-        return usdc.balanceOf(address(this)) >= totalDeposits;
+        return usdc.balanceOf(address(this)) >= totalDeposits + totalOwedInterest;
     }
 
     /**
-     * @dev Available liquidity = actual balance - tracked deposits
-     *      This is the "free" USDC owner funded but not yet deposited by users
+     * @dev Available liquidity = actual balance - tracked deposits - owed interest
+     *      This is the "free" USDC owner funded but not yet committed to deposits/interest
      */
     function getAvailableLiquidity() external view returns (uint256) {
-        return usdc.balanceOf(address(this)) - totalDeposits;
+        return usdc.balanceOf(address(this)) - totalDeposits - totalOwedInterest;
     }
 }
