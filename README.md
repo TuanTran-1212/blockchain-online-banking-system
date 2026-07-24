@@ -152,15 +152,125 @@ npx hardhat deploy --network sepolia
 
 ## Design Answers
 
-> *To be completed — updated incrementally each day*
+### Q1: NFT có thể transfer không?
 
-1. **NFT transferability**
-2. **Empty vault handling**
-3. **Dead bot scenario (auto-renew)**
-4. **Rounding dust**
-5. **Boundary times**
-6. **Disabled plan with active deposits**
-7. **Attack vectors**
+**Không — hiện tại NFT bị khóa vì business logic kiểm tra `owner == msg.sender`.**
+
+ERC721 base (OpenZeppelin) hỗ trợ `transferFrom` / `safeTransferFrom`, nhưng tất cả user functions (`withdrawAtMaturity`, `earlyWithdraw`, `partialEarlyWithdraw`, `renewDeposit`, `autoRenewDeposit`) đều check:
+```solidity
+require(dep.owner == msg.sender, "Not your deposit");
+```
+
+Vì `owner` được set lúc `openDeposit` và không bao giờ thay đổi, transferring NFT sang address khác sẽ:
+- Người nhận mới (owner mới ERC721) không thể gọi任何 flow → tiền bị khóa
+- Người gửi cũ mất quyền kiểm tra ERC721 nhưng vẫn giữ quyền trong mapping
+
+**Đây là thiết kế có chủ đích:** NFT chỉ serve as certificate, không phải tradable asset. Nếu cần transfer trong tương lai, cần update mapping owner qua `_transfer` hook.
+
+---
+
+### Q2: Vault trống thì sao?
+
+**VaultManager có 3 layer bảo vệ:**
+
+1. **`withdrawFromVault()`** — check `totalDeposits >= amount` → revert nếu vault dưới tracked deposits
+2. **`withdrawInterest()`** — check `balance >= totalDeposits + amount` → revert nếu không đủ tiền trả interest
+3. **`withdraw()` (admin)** — check `balance - totalDeposits - totalOwedInterest >= amount` → block nếu vault sẽ dưới obligations
+
+**Trường hợp worst case:** Vault trả hết principal + interest cho tất cả deposits, nhưng không còn gì cho admin. Admin vẫn có thể withdraw phần "free" (balance - totalDeposits - totalOwedInterest).
+
+**C2 Solvency Guard** đảm bảo vault không bao giờ bị drained dưới mức đã cam kết trả interest. Nếu vault mất solvency, admin bị block withdraw.
+
+---
+
+### Q3: Bot chết giữa chừng (auto-renew)?
+
+**Auto-renew phụ thuộc vào bot/off-chain caller — không có guarantee on-chain.**
+
+Nếu bot chết:
+- Deposit vẫn **Active**, user vẫn có thể gọi `withdrawAtMaturity()` hoặc `earlyWithdraw()` bất cứ lúc nào
+- Sau `maturityAt + GRACE_PERIOD_DAYS` (3 ngày), người dùng vẫn có thể gọi `autoRenewDeposit()` — không có time limit
+- Nếu không ai gọi auto-renew sau grace period, deposit vẫn ở trạng thái Active, chờ user gọi `withdrawAtMaturity()` hoặc `renewDeposit()`
+
+**Thực tế:** Không có forced auto-renew. Bot chỉ là convenience layer — user có thể tự quản lý deposits.
+
+---
+
+### Q4: Rounding dust?
+
+**Sử dụng integer division — có thể mất 1 wei dust.**
+
+Interest formula:
+```solidity
+(principal * aprBps * tenorSeconds) / (365 days * 10_000)
+```
+
+Ví dụ: `100 * 375 * 15552000 / 31536000000 = 187.499...` → Solidity truncate xuống `187` → mất 0.5 USDC (với 6 decimals)
+
+**Impact:** Dust tích lũy theo thời gian nhưng không đủ significant. Vault có thể có 1-2 wei "extra" không thuộc principal hay interest obligation.
+
+**Trade-off:** Solidity không có float. Có thể ceil bằng `+ (denominator - 1)` nhưng sẽ overcharge user. Hiện tại để nguyên — dust chấp nhận được.
+
+---
+
+### Q5: Boundary times?
+
+**5 boundary cases được xử lý:**
+
+| Case | Xử lý |
+|---|---|
+| `block.timestamp == maturityAt` | Cho phép withdraw (`>=`) |
+| `block.timestamp == maturityAt + 3 days` | Grace period kết thúc, auto-renew mở |
+| Deposit mở đúng `block.timestamp` | `startAt = block.timestamp` |
+| Interest calculation `tenorSeconds = 0` | `calculateInterest()` trả 0 |
+| Open deposit khi vault có balance = `totalDeposits` | Chưa đủ interest obligation, sẽ revert nếu có interest > 0 |
+
+**Edge case với `autoRenewDeposit`:**
+```solidity
+uint256 gracePeriodEnd = oldDep.maturityAt + (GRACE_PERIOD_DAYS * 1 days);
+require(block.timestamp >= gracePeriodEnd, "Grace period not ended");
+```
+Nếu gọi chính xác `maturityAt + 3 days`, `block.timestamp == gracePeriodEnd` → cho phép.
+
+---
+
+### Q6: Plan disabled khi deposit đang active?
+
+**Deposit vẫn bình thường — disable chỉ chặn deposits mới.**
+
+Khi `disablePlan(planId)`:
+- Deposit hiện tại với plan này vẫn **Active** — tất cả flow hoạt động
+- `openDeposit()` check `plan.enabled` → revert nếu plan disabled
+- `renewDeposit()` check `plans[newPlanId].enabled` → chỉ validate plan mới
+- `autoRenewDeposit()` dùng `plans[oldDep.planId]` nhưng không check `enabled`
+
+**Đây là thiết kế đúng:** Disable plan là business decision — ngừng nhận deposits mới, nhưng existing deposits phải được phục vụ đến maturity.
+
+---
+
+### Q7: Tấn công có thể nghĩ ra?
+
+**5 attack vectors phân tích:**
+
+| Attack | Mức độ | Bảo vệ |
+|---|---|---|
+| **Reentrancy** | Cao | `nonReentrant` trên tất cả external functions |
+| **Vault draining** | Cao | C2 Solvency Guard + `withdraw()` check |
+| **Interest manipulation** | Trung | APR/penalty snapshot khi open, không thể thay đổi |
+| **Plan manipulation** | Trung | Owner-only functions, `require(plan.enabled)` |
+| **Front-running** | Thấp | Không có MEV-sensitive logic |
+
+**Chi tiết:**
+
+1. **Reentrancy attack:** OpenZeppelin `ReentrancyGuard` + state update trước external calls → an toàn
+2. **Vault draining:** Admin có thể drain free balance nhưng không thể drain principal/interest obligations. C2 Solvency Guard chặn admin nếu vault below obligations
+3. **Interest manipulation:** APR snapshot tại `block.timestamp` của `openDeposit`. Owner thay đổi plan APR → deposits mới affected, deposits cũ giữ nguyên
+4. **Plan manipulation:** `disablePlan()` chỉ chặn deposits mới. `updatePlanApr()` chỉ affects deposits mới. Không có way nào để thay đổi deposits đang active
+5. **Front-running:** Không có auction logic, không có price oracle, không có liquidation → không có MEV incentive
+
+**Điểm yếu tiềm ẩn:**
+- Nếu `recordInterestOwed()` và `releaseInterestOwed()` không được gọi đúng, `totalOwedInterest` có thể sai lệch. Hiện tại hardcode trong SavingCore flows → an toàn
+- Frontend có thể hiển thị sai nếu RPC node sync chậm (không phải smart contract issue)
 
 ---
 
@@ -238,6 +348,8 @@ project/
 |   +-- DAY2.md               Report Day 2 (Vietnamese)
 |   +-- DAY3.md               Report Day 3 (Vietnamese)
 |   +-- DAY4.md               Report Day 4 (Vietnamese)
+|   +-- DAY5.md               Report Day 5 (Vietnamese)
+|   +-- DAY6.md               Report Day 6 (Vietnamese)
 +-- architectureDesign.md     System architecture + diagrams
 +-- plan.md                   Project plan + progress
 +-- hardhat.config.ts         Hardhat configuration

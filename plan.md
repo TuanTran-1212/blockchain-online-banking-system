@@ -139,12 +139,12 @@ project/
 
 ---
 
-## Day 6 — Design Answers + README ⏳
-**Trạng thái:** Chờ
+## Day 6 — Design Answers + README ✅
+**Trạng thái:** Hoàn thành
 
 ### Mục tiêu
-- [ ] Viết README.md với header Personal Variant
-- [ ] Trả lời 7 câu hỏi design:
+- [x] Viết README.md với header Personal Variant
+- [x] Trả lời 7 câu hỏi design:
   1. NFT có thể transfer không?
   2. Vault trống thì sao?
   3. Bot chết giữa chừng?
