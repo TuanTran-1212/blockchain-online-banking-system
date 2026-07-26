@@ -259,79 +259,126 @@ export default function Home({
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div className="stat-cards">
+      {/* Stat Cards — User: 3 + Admin: 1 (Rủi ro) */}
+      <div className="stat-cards" style={{ gridTemplateColumns: isAdmin ? "repeat(4, 1fr)" : "repeat(3, 1fr)" }}>
         <div className="stat-card">
           <div className="stat-icon blue">💰</div>
           <div className="stat-info">
-            <div className="stat-label">Số dư USDC</div>
+            <div className="stat-label">Số dư ví</div>
             <div className="stat-value">
               {loading ? "..." : usdcBalance !== null ? `${Number(usdcBalance).toLocaleString()}` : "--"}
             </div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon green">📊</div>
+          <div className="stat-icon green">💵</div>
           <div className="stat-info">
-            <div className="stat-label">Giao dịch đang active</div>
-            <div className="stat-value">{activeDeposits.length}</div>
+            <div className="stat-label">Tiết kiệm</div>
+            <div className="stat-value">{activeDeposits.length} khoản</div>
+            <div className="stat-sub">
+              <span><strong>{formatUSDC(totalPrincipal)}</strong> USDC</span>
+            </div>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon yellow">📈</div>
           <div className="stat-info">
-            <div className="stat-label">Tổng vốn</div>
-            <div className="stat-value">{formatUSDC(totalPrincipal)}</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon green">💎</div>
-          <div className="stat-info">
             <div className="stat-label">Lãi ước tính</div>
-            <div className="stat-value green">{formatUSDC(totalEstInterest)}</div>
+            <div className="stat-value green">+{formatUSDC(totalEstInterest)}</div>
           </div>
         </div>
 
-        {isAdmin && (
-          <>
+        {/* Admin: Rủi ro hệ thống */}
+        {isAdmin && vaultHealth && (() => {
+          const vaultBal = Number(formatUSDC(vaultHealth.balance));
+          const totalDep = Number(formatUSDC(vaultHealth.totalDeposits));
+          const ratio = totalDep > 0 ? vaultBal / totalDep : vaultBal > 0 ? 999 : 0;
+          const ratioPct = Math.min(ratio * 100, 999);
+          const riskColor = ratio >= 2 ? "green" : ratio >= 1 ? "yellow" : "red";
+          const riskLabel = ratio >= 2 ? "Thấp" : ratio >= 1 ? "Trung bình" : "Cao";
+          const riskDesc = ratio >= 2
+            ? "Dự trữ dồi dào, hệ thống hoạt động bình thường"
+            : ratio >= 1
+            ? "Dự trữ ở mức trung bình, cần theo dõi"
+            : "Cảnh báo: dự trữ không đủ trả nợ!";
+          const fillPct = Math.min(ratioPct, 100);
+
+          return (
             <div className="stat-card">
-              <div className="stat-icon blue">💼</div>
+              <div className={`stat-icon ${riskColor}`}>⚡</div>
               <div className="stat-info">
-                <div className="stat-label">Số dư quỹ</div>
-                <div className="stat-value">{vaultHealth ? `${formatUSDC(vaultHealth.balance)} USDC` : "—"}</div>
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-icon green">🏦</div>
-              <div className="stat-info">
-                <div className="stat-label">Tổng tiền gửi</div>
-                <div className="stat-value green">{vaultHealth ? `${formatUSDC(vaultHealth.totalDeposits)} USDC` : "—"}</div>
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-icon yellow">⚠️</div>
-              <div className="stat-info">
-                <div className="stat-label">Lãi nợ</div>
-                <div className="stat-value">{vaultHealth ? `${formatUSDC(vaultHealth.totalOwedInterest)} USDC` : "—"}</div>
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className={`stat-icon ${vaultHealth?.isSolvent ? "green" : "red"}`}>✅</div>
-              <div className="stat-info">
-                <div className="stat-label">Thanh khoản khả dụng</div>
-                <div className="stat-value" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  {vaultHealth ? `${formatUSDC(vaultHealth.availableLiquidity)} USDC` : "—"}
-                  {vaultHealth && (
-                    <span className={`tag ${vaultHealth.isSolvent ? "tag-green" : "tag-red"}`}>
-                      {vaultHealth.isSolvent ? "Đạt" : "Chưa đạt"}
-                    </span>
-                  )}
+                <div className="stat-label">Rủi ro hệ thống</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem" }}>
+                  <span className={`risk-badge ${riskColor}`}>{riskLabel}</span>
                 </div>
+                <div className="solvency-bar">
+                  <div
+                    className={`solvency-fill ${riskColor}`}
+                    style={{ width: `${fillPct}%` }}
+                  />
+                </div>
+                <div className="risk-desc">{riskDesc}</div>
               </div>
             </div>
-          </>
-        )}
+          );
+        })()}
       </div>
+
+      {/* Vault Health — Admin only, full width */}
+      {isAdmin && vaultHealth && (() => {
+        const vaultBal = Number(formatUSDC(vaultHealth.balance));
+        const totalDep = Number(formatUSDC(vaultHealth.totalDeposits));
+        const ratio = totalDep > 0 ? vaultBal / totalDep : vaultBal > 0 ? 999 : 0;
+        const ratioPct = Math.min(ratio * 100, 999);
+        const fillPct = Math.min(ratioPct, 100);
+        const ratioColor = ratio >= 2 ? "green" : ratio >= 1 ? "yellow" : "red";
+
+        return (
+          <div className="card section-full" style={{ marginBottom: "1.5rem" }}>
+            <div className="card-header">
+              <div>
+                <h3 className="card-title">Sức khỏe quỹ</h3>
+                <p className="card-subtitle">Tổng quan tình hình tài chính hệ thống</p>
+              </div>
+              <span className={`risk-badge ${ratioColor}`}>
+                Tỷ lệ dự trữ: {ratioPct >= 999 ? "∞" : ratioPct.toFixed(0)}%
+              </span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.25rem" }}>
+              <div className="metric-box">
+                <div className="stat-label">Số dư quỹ</div>
+                <div className="stat-value" style={{ fontSize: "1.1rem" }}>{formatUSDC(vaultHealth.balance)} USDC</div>
+              </div>
+              <div className="metric-box">
+                <div className="stat-label">Tổng tiền gửi</div>
+                <div className="stat-value" style={{ fontSize: "1.1rem" }}>{formatUSDC(vaultHealth.totalDeposits)} USDC</div>
+              </div>
+              <div className="metric-box">
+                <div className="stat-label">Nợ lãi phải trả</div>
+                <div className="stat-value" style={{ fontSize: "1.1rem", color: "var(--warning)" }}>{formatUSDC(vaultHealth.totalOwedInterest)} USDC</div>
+              </div>
+              <div className="metric-box">
+                <div className="stat-label">Thanh khoản khả dụng</div>
+                <div className="stat-value" style={{ fontSize: "1.1rem", color: vaultHealth.isSolvent ? "var(--success)" : "var(--danger)" }}>{formatUSDC(vaultHealth.availableLiquidity)} USDC</div>
+              </div>
+            </div>
+            <div style={{ marginTop: "1.25rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.35rem" }}>
+                <span className="stat-label">Tỷ lệ dự trữ (Tỷ lệ quỹ / Tổng tiền gửi)</span>
+                <span className="stat-label" style={{ fontWeight: 600 }}>{ratioPct >= 999 ? "∞" : ratioPct.toFixed(1)}%</span>
+              </div>
+              <div className="solvency-bar" style={{ height: "10px" }}>
+                <div className={`solvency-fill ${ratioColor}`} style={{ width: `${fillPct}%` }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.35rem" }}>
+                <span className="help-text">0%</span>
+                <span className="help-text">100% (đạt)</span>
+                <span className="help-text">200%+ (dồi dào)</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Plans Grid */}
       <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "0.75rem" }}>

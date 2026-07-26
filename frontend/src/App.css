@@ -256,6 +256,14 @@ body {
 .stat-value.green { color: var(--success); }
 .stat-value.red { color: var(--danger); }
 
+/* ===== METRIC BOX (Vault Health detail) ===== */
+.metric-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
 /* ===== SECTION GRID (6/12) ===== */
 .section-grid {
   display: grid;
@@ -535,6 +543,66 @@ body {
   color: var(--text-muted);
   font-size: 0.8rem;
   border-top: 1px solid var(--border);
+}
+
+/* ===== SOLVENCY BAR ===== */
+.solvency-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--border);
+  margin: 0.5rem 0;
+  overflow: hidden;
+}
+
+.solvency-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.solvency-fill.green { background: var(--success); }
+.solvency-fill.yellow { background: var(--warning); }
+.solvency-fill.red { background: var(--danger); }
+
+/* ===== RISK BADGE ===== */
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.risk-badge.green { background: var(--success-light); color: var(--success); }
+.risk-badge.yellow { background: var(--warning-light); color: var(--warning); }
+.risk-badge.red { background: var(--danger-light); color: var(--danger); }
+
+.risk-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+/* ===== STAT SUB-ROWS ===== */
+.stat-sub {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid #f1f5f9;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.stat-sub span {
+  display: block;
+}
+
+.stat-sub strong {
+  color: var(--text);
+  font-weight: 600;
 }
 
 /* ===== RESPONSIVE ===== */
