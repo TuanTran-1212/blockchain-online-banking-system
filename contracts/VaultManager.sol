@@ -20,9 +20,11 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable usdc;
+    address public savingCore; // Authorized caller for callback functions
     uint256 public totalDeposits;     // Sum of all user deposits tracked
     uint256 public totalOwedInterest; // Total interest owed to active deposits (C2: Solvency Guard)
 
+    event SavingCoreUpdated(address indexed oldCore, address indexed newCore);
     event VaultFunded(address indexed owner, uint256 amount);
     event VaultWithdrawn(address indexed owner, uint256 amount);
     event DepositRecorded(uint256 amount);
@@ -32,9 +34,24 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
     event PausedByOwner();
     event UnpausedByOwner();
 
+    modifier onlySavingCore() {
+        require(msg.sender == savingCore, "Not authorized");
+        _;
+    }
+
     constructor(address _usdc) Ownable(msg.sender) {
         require(_usdc != address(0), "Invalid USDC address");
         usdc = IERC20(_usdc);
+    }
+
+    /**
+     * @dev Set or update the authorized SavingCore address
+     *      Must be called after both contracts are deployed
+     */
+    function setSavingCore(address _savingCore) external onlyOwner {
+        require(_savingCore != address(0), "Invalid address");
+        emit SavingCoreUpdated(savingCore, _savingCore);
+        savingCore = _savingCore;
     }
 
     // ========================
@@ -74,7 +91,7 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
      *      Records the deposit and accepts USDC transfer
      * @param amount Amount deposited by user
      */
-    function depositToVault(uint256 amount) external whenNotPaused {
+    function depositToVault(uint256 amount) external onlySavingCore whenNotPaused {
         require(amount > 0, "Amount must be > 0");
         totalDeposits += amount;
         // USDC is transferred to VaultManager by SavingCore before calling this
@@ -87,7 +104,7 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
      * @param to Recipient address
      * @param amount Amount to withdraw (principal)
      */
-    function withdrawFromVault(address to, uint256 amount) external whenNotPaused nonReentrant {
+    function withdrawFromVault(address to, uint256 amount) external onlySavingCore nonReentrant whenNotPaused {
         require(amount > 0, "Amount must be > 0");
         require(totalDeposits >= amount, "Insufficient deposits tracked");
         totalDeposits -= amount;
@@ -101,7 +118,7 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
      * @param to Recipient address
      * @param amount Interest amount to pay
      */
-    function withdrawInterest(address to, uint256 amount) external whenNotPaused nonReentrant {
+    function withdrawInterest(address to, uint256 amount) external onlySavingCore nonReentrant whenNotPaused {
         require(amount > 0, "Amount must be > 0");
         require(
             usdc.balanceOf(address(this)) >= totalDeposits + amount,
@@ -120,7 +137,7 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
      *      Records the expected interest obligation
      * @param amount Expected interest for the deposit
      */
-    function recordInterestOwed(uint256 amount) external {
+    function recordInterestOwed(uint256 amount) external onlySavingCore {
         totalOwedInterest += amount;
         emit InterestOwedRecorded(amount);
     }
@@ -130,7 +147,7 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
      *      Releases the interest obligation
      * @param amount Interest obligation to release
      */
-    function releaseInterestOwed(uint256 amount) external {
+    function releaseInterestOwed(uint256 amount) external onlySavingCore {
         require(totalOwedInterest >= amount, "Invalid release amount");
         totalOwedInterest -= amount;
         emit InterestOwedReleased(amount);
@@ -173,6 +190,8 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
      *      This is the "free" USDC owner funded but not yet committed to deposits/interest
      */
     function getAvailableLiquidity() external view returns (uint256) {
-        return usdc.balanceOf(address(this)) - totalDeposits - totalOwedInterest;
+        uint256 balance = usdc.balanceOf(address(this));
+        uint256 obligations = totalDeposits + totalOwedInterest;
+        return balance > obligations ? balance - obligations : 0;
     }
 }

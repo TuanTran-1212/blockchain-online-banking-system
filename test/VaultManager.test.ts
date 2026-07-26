@@ -24,6 +24,9 @@ describe("VaultManager", function () {
     vaultManager = await VaultManager.deploy(await mockUSDC.getAddress());
     await vaultManager.waitForDeployment();
 
+    // Set owner as authorized caller for direct testing
+    await vaultManager.setSavingCore(owner.address);
+
     // Approve VaultManager to spend owner's USDC
     await mockUSDC.approve(await vaultManager.getAddress(), FUND_AMOUNT);
   });

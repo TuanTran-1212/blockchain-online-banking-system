@@ -22,6 +22,9 @@ describe("VaultManager — Edge Cases", function () {
     vaultManager = await VaultManager.deploy(await mockUSDC.getAddress());
     await vaultManager.waitForDeployment();
 
+    // Set owner as authorized caller for direct testing
+    await vaultManager.setSavingCore(owner.address);
+
     await mockUSDC.approve(await vaultManager.getAddress(), FUND_AMOUNT);
   });
 
@@ -34,6 +37,58 @@ describe("VaultManager — Edge Cases", function () {
       await expect(
         VaultManager.deploy(ethers.ZeroAddress)
       ).to.be.revertedWith("Invalid USDC address");
+    });
+  });
+
+  // ============================================================
+  // Access Control — onlySavingCore
+  // ============================================================
+  describe("Access Control — onlySavingCore", function () {
+    it("should reject depositToVault from non-SavingCore", async function () {
+      await expect(
+        vaultManager.connect(addr1).depositToVault(1000)
+      ).to.be.revertedWith("Not authorized");
+    });
+
+    it("should reject withdrawFromVault from non-SavingCore", async function () {
+      await expect(
+        vaultManager.connect(addr1).withdrawFromVault(addr1.address, 1000)
+      ).to.be.revertedWith("Not authorized");
+    });
+
+    it("should reject withdrawInterest from non-SavingCore", async function () {
+      await expect(
+        vaultManager.connect(addr1).withdrawInterest(addr1.address, 1000)
+      ).to.be.revertedWith("Not authorized");
+    });
+
+    it("should reject recordInterestOwed from non-SavingCore", async function () {
+      await expect(
+        vaultManager.connect(addr1).recordInterestOwed(1000)
+      ).to.be.revertedWith("Not authorized");
+    });
+
+    it("should reject releaseInterestOwed from non-SavingCore", async function () {
+      await expect(
+        vaultManager.connect(addr1).releaseInterestOwed(1000)
+      ).to.be.revertedWith("Not authorized");
+    });
+
+    it("should allow savingCore to call depositToVault", async function () {
+      await expect(vaultManager.depositToVault(1000))
+        .to.emit(vaultManager, "DepositRecorded");
+    });
+
+    it("should reject setSavingCore from non-owner", async function () {
+      await expect(
+        vaultManager.connect(addr1).setSavingCore(addr1.address)
+      ).to.be.revertedWithCustomError(vaultManager, "OwnableUnauthorizedAccount");
+    });
+
+    it("should reject setSavingCore with zero address", async function () {
+      await expect(
+        vaultManager.setSavingCore(ethers.ZeroAddress)
+      ).to.be.revertedWith("Invalid address");
     });
   });
 

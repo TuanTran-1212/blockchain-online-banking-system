@@ -38,6 +38,9 @@ describe("Coverage — Branch Fix", function () {
     );
     await savingCore.waitForDeployment();
 
+    // Link VaultManager to SavingCore (authorization)
+    await vaultManager.setSavingCore(await savingCore.getAddress());
+
     await mockUSDC.approve(await vaultManager.getAddress(), FUND_AMOUNT);
     await vaultManager.fund(FUND_AMOUNT);
 
@@ -103,20 +106,22 @@ describe("Coverage — Branch Fix", function () {
   // VaultManager: paused operations
   // ============================================================
   describe("VaultManager — Paused withdrawFromVault", function () {
-    it("should reject withdrawFromVault when paused", async function () {
+    it("should reject withdrawFromVault when paused (via non-authorized caller)", async function () {
       await vaultManager.pause();
+      // owner is not savingCore → Not authorized (access control first)
       await expect(
         vaultManager.withdrawFromVault(user1.address, ethers.parseUnits("100", 6))
-      ).to.be.revertedWithCustomError(vaultManager, "EnforcedPause");
+      ).to.be.revertedWith("Not authorized");
     });
   });
 
   describe("VaultManager — Paused withdrawInterest", function () {
-    it("should reject withdrawInterest when paused", async function () {
+    it("should reject withdrawInterest when paused (via non-authorized caller)", async function () {
       await vaultManager.pause();
+      // owner is not savingCore → Not authorized (access control first)
       await expect(
         vaultManager.withdrawInterest(user1.address, ethers.parseUnits("100", 6))
-      ).to.be.revertedWithCustomError(vaultManager, "EnforcedPause");
+      ).to.be.revertedWith("Not authorized");
     });
   });
 

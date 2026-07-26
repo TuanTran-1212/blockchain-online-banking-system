@@ -9,11 +9,11 @@ export const CONTRACTS = {
     abi: (MockUSDC as any).abi,
   },
   VaultManager: {
-    address: "0x29b7e818Eaa803111788eFE924ff3682093CA3a8",
+    address: "0x1521290278AAa3f9E8eC25866A1DC63B6d48Aa00",
     abi: (VaultManager as any).abi,
   },
   SavingCore: {
-    address: "0x468864a15B76327f578d0dCb0E544D4C6A1aEC03",
+    address: "0x0f21053868fE011919d0d8FacFa0aab1cf72dCDf",
     abi: (SavingCore as any).abi,
   },
 };
@@ -44,7 +44,15 @@ export interface Deposit {
   status: number;
 }
 
-export const DEPOSIT_STATUS = ["Active", "Withdrawn", "ManualRenewed", "AutoRenewed"];
+export interface VaultHealth {
+  balance: bigint;
+  totalDeposits: bigint;
+  totalOwedInterest: bigint;
+  isSolvent: boolean;
+  availableLiquidity: bigint;
+}
+
+export const DEPOSIT_STATUS = ["Đang gửi", "Đã rút", "Gia hạn", "Tự động gia hạn"];
 
 export function getSavingCore(signerOrProvider: ethers.Signer | ethers.Provider) {
   return new ethers.Contract(CONTRACTS.SavingCore.address, CONTRACTS.SavingCore.abi, signerOrProvider);
@@ -101,6 +109,28 @@ export async function fetchUserDeposits(
     });
   }
   return deposits;
+}
+
+export async function fetchVaultHealth(provider: ethers.Provider): Promise<VaultHealth> {
+  const vm = getVaultManager(provider);
+  const [balance, totalDeposits, totalOwedInterest, isSolvent, availableLiquidity] = await Promise.all([
+    vm.vaultBalance(),
+    vm.totalDeposits(),
+    vm.totalOwedInterest(),
+    vm.isSolvent(),
+    vm.getAvailableLiquidity(),
+  ]);
+  return { balance, totalDeposits, totalOwedInterest, isSolvent, availableLiquidity };
+}
+
+export async function fetchOwner(provider: ethers.Provider): Promise<string> {
+  const core = getSavingCore(provider);
+  return await core.owner();
+}
+
+export async function fetchUSDCBalance(provider: ethers.Provider, address: string): Promise<bigint> {
+  const usdc = getMockUSDC(provider);
+  return await usdc.balanceOf(address);
 }
 
 export function formatUSDC(amount: bigint): string {

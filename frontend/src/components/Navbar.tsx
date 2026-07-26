@@ -1,5 +1,3 @@
-
-
 interface Props {
   address: string | null;
   isCorrectNetwork: boolean;
@@ -32,40 +30,48 @@ export default function Navbar({
           className={`nav-link ${activePage === "home" ? "active" : ""}`}
           onClick={() => setActivePage("home")}
         >
-          Home
+          Trang chủ
         </button>
         <button
           className={`nav-link ${activePage === "open" ? "active" : ""}`}
           onClick={() => setActivePage("open")}
         >
-          Open Deposit
+          Gửi tiết kiệm
         </button>
         <button
           className={`nav-link ${activePage === "mydeposits" ? "active" : ""}`}
           onClick={() => setActivePage("mydeposits")}
         >
-          My Deposits
+          Giao dịch của tôi
         </button>
+        {address && (
+          <button
+            className={`nav-link ${activePage === "audit" ? "active" : ""}`}
+            onClick={() => setActivePage("audit")}
+          >
+            Nhật ký giao dịch
+          </button>
+        )}
       </div>
 
       <div className="navbar-wallet">
         {address ? (
           <div className="wallet-info">
             {!isCorrectNetwork && (
-              <button className="btn-warning" onClick={switchToSepolia}>
-                Switch to Sepolia
+              <button className="btn-warning btn-sm" onClick={switchToSepolia}>
+                Chuyển sang Sepolia
               </button>
             )}
             <span className="wallet-address">
               {address.slice(0, 6)}...{address.slice(-4)}
             </span>
             <button className="btn-disconnect" onClick={disconnect}>
-              Disconnect
+              Logout
             </button>
           </div>
         ) : (
           <button className="btn-primary" onClick={connect} disabled={isConnecting}>
-            {isConnecting ? "Connecting..." : "Connect MetaMask"}
+            {isConnecting ? "Đang kết nối..." : "Kết nối ví"}
           </button>
         )}
       </div>

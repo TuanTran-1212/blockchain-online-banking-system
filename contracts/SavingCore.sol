@@ -206,6 +206,9 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         // C2: Record expected interest obligation in vault
         uint256 expectedInterest = calculateInterest(amount, plan.aprBps, plan.tenorDays * 1 days);
         if (expectedInterest > 0) {
+            // Check vault has enough liquidity to cover this interest obligation
+            uint256 available = vaultManager.getAvailableLiquidity();
+            require(available >= expectedInterest, "Insufficient vault liquidity for interest");
             vaultManager.recordInterestOwed(expectedInterest);
         }
 
@@ -423,6 +426,11 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
 
         // Same plan, same APR, same penalty (snapshots from original)
         Plan storage currentPlan = plans[oldDep.planId];
+        require(currentPlan.enabled, "Plan is disabled");
+
+        // Validate min/max deposit constraints (same as renewDeposit)
+        require(newPrincipal >= currentPlan.minDeposit, "New principal below minimum");
+        require(currentPlan.maxDeposit == 0 || newPrincipal <= currentPlan.maxDeposit, "New principal exceeds maximum");
 
         // Register interest as tracked deposit in vault (virtual — tokens already in vault)
         if (interest > 0) {
@@ -511,6 +519,30 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
     function setTokenURI(uint256 tokenId, string memory uri) external onlyOwner {
         require(_ownerOf(tokenId) != address(0), "Token does not exist");
         _tokenURIs[tokenId] = uri;
+    }
+
+    // ========================
+    // NFT Soulbound — Prevent Transfer
+    // ========================
+
+    /**
+     * @dev Override _update to make NFT non-transferable.
+     *      Only allows:
+     *      - Burns (to == address(0)) — called by contract during withdraw/renew
+     *      - Mints (auth == address(0)) — called by contract during openDeposit/renew
+     *      - Internal contract operations (auth == address(this))
+     *      Blocks user-initiated transferFrom/safeTransferFrom.
+     */
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override
+        returns (address)
+    {
+        require(
+            auth == address(this) || auth == address(0) || to == address(0),
+            "NFT is non-transferable"
+        );
+        return super._update(to, tokenId, auth);
     }
 
     // ========================

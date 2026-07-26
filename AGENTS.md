@@ -65,8 +65,16 @@ Interest formula: `interest = (principal * aprBps * tenorSeconds) / (365 days * 
 | Contract | Address |
 |---|---|
 | MockUSDC | `0x45BAB50D9DFCE9176A64fA6Ce12Bb9288E2B5269` |
-| VaultManager | `0x29b7e818Eaa803111788eFE924ff3682093CA3a8` |
-| SavingCore | `0x468864a15B76327f578d0dCb0E544D4C6A1aEC03` |
+| VaultManager | `0x1521290278AAa3f9E8eC25866A1DC63B6d48Aa00` |
+| SavingCore | `0x0f21053868fE011919d0d8FacFa0aab1cf72dCDf` |
+
+## Sepolia Test Accounts
+
+| Role | Address | Source |
+|---|---|---|
+| Admin/Deployer | `0x6F443186763CC24B5774EC32F8fDbE751E926492` | `.env` TESTNET_PRIVATE_KEY |
+| Test User 1 | `0x2E7809EFaF0b8d9f10D3d1f04dFbfaEe7CaC60F5` | MetaMask (imported) |
+| Test User 2 | `0x95C8146bf5D8b189e39269172eB8938623a556cC` | MetaMask (imported) |
 
 ## Frontend
 

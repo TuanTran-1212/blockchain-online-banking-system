@@ -70,20 +70,40 @@ export function useWallet() {
   }, []);
 
   useEffect(() => {
-    if (window.ethereum) {
-      window.ethereum.on("accountsChanged", (accounts: string[]) => {
-        if (accounts.length === 0) {
-          disconnect();
-        } else if (wallet.address) {
-          connect();
-        }
-      });
+    if (!window.ethereum) return;
 
-      window.ethereum.on("chainChanged", () => {
-        window.location.reload();
+    const handleAccountsChanged = async (accounts: string[]) => {
+      if (accounts.length === 0) {
+        disconnect();
+        return;
+      }
+
+      const newAddress = accounts[0];
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const network = await provider.getNetwork();
+
+      setWallet({
+        address: newAddress,
+        provider,
+        signer,
+        chainId: Number(network.chainId),
+        isCorrectNetwork: Number(network.chainId) === SEPOLIA_CHAIN_ID,
       });
-    }
-  }, [connect, disconnect, wallet.address]);
+    };
+
+    const handleChainChanged = () => {
+      window.location.reload();
+    };
+
+    window.ethereum.on("accountsChanged", handleAccountsChanged);
+    window.ethereum.on("chainChanged", handleChainChanged);
+
+    return () => {
+      window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      window.ethereum.removeListener("chainChanged", handleChainChanged);
+    };
+  }, [connect, disconnect]);
 
   return { ...wallet, connect, disconnect, switchToSepolia, isConnecting };
 }

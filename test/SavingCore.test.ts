@@ -43,6 +43,9 @@ describe("SavingCore", function () {
     );
     await savingCore.waitForDeployment();
 
+    // Link VaultManager to SavingCore (authorization)
+    await vaultManager.setSavingCore(await savingCore.getAddress());
+
     // Fund vault
     await mockUSDC.approve(await vaultManager.getAddress(), FUND_AMOUNT);
     await vaultManager.fund(FUND_AMOUNT);

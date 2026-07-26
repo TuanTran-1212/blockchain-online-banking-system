@@ -9,8 +9,10 @@
     "deploy:sepolia": "hardhat deploy --network sepolia",
     "run:sepolia": "hardhat run --network sepolia",
     "coverage": "hardhat coverage",
+    "time-travel": "hardhat run scripts/time-travel.ts",
     "demo:setup": "hardhat run --network sepolia scripts/demo-setup.ts",
-    "demo:check": "hardhat run --network sepolia scripts/check-status.ts"
+    "demo:check": "hardhat run --network sepolia scripts/check-status.ts",
+    "demo:mint-users": "hardhat run --network sepolia scripts/mint-test-users.ts"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.1.0"

@@ -2,7 +2,7 @@ import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
-  const { deployments, getNamedAccounts } = hre;
+  const { deployments, getNamedAccounts, ethers } = hre;
   const { deploy } = deployments;
   const { deployer } = await getNamedAccounts();
 
@@ -36,8 +36,18 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     autoMine: true,
   });
 
+  // Set SavingCore as authorized caller on VaultManager
   console.log("========================================");
-  console.log("All contracts deployed!");
+  console.log("Linking VaultManager -> SavingCore...");
+  console.log("========================================");
+
+  const vm = await ethers.getContractAt("VaultManager", vaultManager.address);
+  const tx = await vm.setSavingCore(savingCore.address);
+  await tx.wait();
+  console.log("VaultManager.setSavingCore(" + savingCore.address + ") ✓");
+
+  console.log("========================================");
+  console.log("All contracts deployed and linked!");
   console.log("MockUSDC:", MockUSDC.address);
   console.log("VaultManager:", vaultManager.address);
   console.log("SavingCore:", savingCore.address);

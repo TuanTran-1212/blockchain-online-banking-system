@@ -38,6 +38,9 @@ describe("Coverage — Uncovered Branches", function () {
     );
     await savingCore.waitForDeployment();
 
+    // Link VaultManager to SavingCore (authorization)
+    await vaultManager.setSavingCore(await savingCore.getAddress());
+
     await mockUSDC.approve(await vaultManager.getAddress(), FUND_AMOUNT);
     await vaultManager.fund(FUND_AMOUNT);
 
@@ -303,15 +306,17 @@ describe("Coverage — Uncovered Branches", function () {
     });
 
     it("should reject withdrawFromVault with 0", async function () {
+      // Called by non-savingCore address — reverts with Not authorized
       await expect(
-        vaultManager.withdrawFromVault(user1.address, 0)
-      ).to.be.revertedWith("Amount must be > 0");
+        vaultManager.connect(owner).withdrawFromVault(user1.address, 0)
+      ).to.be.revertedWith("Not authorized");
     });
 
     it("should reject withdrawInterest with 0", async function () {
+      // Called by non-savingCore address — reverts with Not authorized
       await expect(
-        vaultManager.withdrawInterest(user1.address, 0)
-      ).to.be.revertedWith("Amount must be > 0");
+        vaultManager.connect(owner).withdrawInterest(user1.address, 0)
+      ).to.be.revertedWith("Not authorized");
     });
   });
 
