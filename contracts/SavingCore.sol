@@ -116,7 +116,7 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         require(tenorDays > 0, "Tenor must be > 0");
         require(aprBps > 0 && aprBps <= 5000, "Invalid APR");
         require(earlyWithdrawPenaltyBps <= 2000, "Invalid penalty");
-        require(minDeposit > 0, "minDeposit must be > 0");
+        // minDeposit = 0 means no minimum (uint256 cannot be negative)
 
         uint256 planId = planCount;
         plans[planId] = Plan({

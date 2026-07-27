@@ -5,6 +5,8 @@ import { formatUSDC, getSavingCore, getVaultManager } from "../config/contracts"
 interface Props {
   provider: ethers.BrowserProvider | null;
   isCorrectNetwork: boolean;
+  address: string | null;
+  isAdmin: boolean;
 }
 
 interface LogEntry {
@@ -29,7 +31,40 @@ const EVENT_TAG_CLASS: Record<string, string> = {
   VaultWithdrawn: "tag tag-red",
 };
 
-export default function AuditLog({ provider, isCorrectNetwork }: Props) {
+const RPC_TIMEOUT_MS = 15000;
+const SCAN_BLOCKS = 10000;
+const CHUNK_SIZE = 2000;
+const TIMESTAMP_BATCH = 20;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label}: timeout ${ms / 1000}s`)), ms)
+    ),
+  ]);
+}
+
+async function fetchTimestampsBatched(
+  provider: ethers.Provider,
+  blockNumbers: number[]
+): Promise<Record<number, number>> {
+  const timestamps: Record<number, number> = {};
+  for (let i = 0; i < blockNumbers.length; i += TIMESTAMP_BATCH) {
+    const batch = blockNumbers.slice(i, i + TIMESTAMP_BATCH);
+    await Promise.allSettled(
+      batch.map(async (bn) => {
+        try {
+          const block = await withTimeout(provider.getBlock(bn), RPC_TIMEOUT_MS, `block#${bn}`);
+          if (block) timestamps[bn] = block.timestamp;
+        } catch {}
+      })
+    );
+  }
+  return timestamps;
+}
+
+export default function AuditLog({ provider, isCorrectNetwork, address, isAdmin }: Props) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +81,45 @@ export default function AuditLog({ provider, isCorrectNetwork }: Props) {
       const core = getSavingCore(provider);
       const vm = getVaultManager(provider);
 
+      const latestBlock = await withTimeout(
+        provider.getBlockNumber(),
+        RPC_TIMEOUT_MS,
+        "getBlockNumber"
+      );
+      const fromBlock = Math.max(0, latestBlock - SCAN_BLOCKS);
+
+      const ranges: Array<{ from: number; to: number }> = [];
+      for (let start = fromBlock; start <= latestBlock; start += CHUNK_SIZE) {
+        ranges.push({ from: start, to: Math.min(start + CHUNK_SIZE - 1, latestBlock) });
+      }
+
+      const queryAllRanges = async (
+        label: string,
+        filterFn: (from: number, to: number) => Promise<ethers.EventLog[] | ethers.Log[]>
+      ): Promise<ethers.EventLog[]> => {
+        const results: ethers.EventLog[] = [];
+        for (const range of ranges) {
+          try {
+            const events = await withTimeout(
+              filterFn(range.from, range.to),
+              RPC_TIMEOUT_MS,
+              `${label}#${range.from}-${range.to}`
+            );
+            results.push(...(events as ethers.EventLog[]));
+          } catch (err: any) {
+            console.warn(`${label} chunk failed:`, err.message);
+          }
+        }
+        return results;
+      };
+
+      const failedTypes: string[] = [];
+      const getEvents = (result: PromiseSettledResult<ethers.EventLog[]>, label: string): ethers.EventLog[] => {
+        if (result.status === "fulfilled") return result.value;
+        failedTypes.push(label);
+        return [];
+      };
+
       const allRaw: Array<{
         blockNumber: number;
         eventName: string;
@@ -53,166 +127,198 @@ export default function AuditLog({ provider, isCorrectNetwork }: Props) {
         txHash: string;
       }> = [];
 
-      const failedTypes: string[] = [];
+      if (isAdmin) {
+        const [
+          openedEvents,
+          withdrawnEvents,
+          earlyWithdrawnEvents,
+          renewedEvents,
+          partialEvents,
+          planCreatedEvents,
+          planAprUpdatedEvents,
+          planEnabledEvents,
+          planDisabledEvents,
+          vaultFundedEvents,
+          vaultWithdrawnEvents,
+        ] = await Promise.allSettled([
+          queryAllRanges("DepositOpened", (f, t) => core.queryFilter(core.filters.DepositOpened(), f, t)),
+          queryAllRanges("DepositWithdrawn", (f, t) => core.queryFilter(core.filters.DepositWithdrawn(), f, t)),
+          queryAllRanges("DepositEarlyWithdrawn", (f, t) => core.queryFilter(core.filters.DepositEarlyWithdrawn(), f, t)),
+          queryAllRanges("DepositRenewed", (f, t) => core.queryFilter(core.filters.DepositRenewed(), f, t)),
+          queryAllRanges("DepositPartialEarlyWithdrawn", (f, t) => core.queryFilter(core.filters.DepositPartialEarlyWithdrawn(), f, t)),
+          queryAllRanges("PlanCreated", (f, t) => core.queryFilter(core.filters.PlanCreated(), f, t)),
+          queryAllRanges("PlanAprUpdated", (f, t) => core.queryFilter(core.filters.PlanAprUpdated(), f, t)),
+          queryAllRanges("PlanEnabled", (f, t) => core.queryFilter(core.filters.PlanEnabled(), f, t)),
+          queryAllRanges("PlanDisabled", (f, t) => core.queryFilter(core.filters.PlanDisabled(), f, t)),
+          queryAllRanges("VaultFunded", (f, t) => vm.queryFilter(vm.filters.VaultFunded(), f, t)),
+          queryAllRanges("VaultWithdrawn", (f, t) => vm.queryFilter(vm.filters.VaultWithdrawn(), f, t)),
+        ]);
 
-      const safeQuery = async (
-        label: string,
-        fn: () => Promise<ethers.EventLog[] | ethers.Log[]>
-      ) => {
-        try {
-          return await fn();
-        } catch (err: any) {
-          console.warn(`Failed to query ${label}:`, err);
-          failedTypes.push(label);
-          return [] as ethers.EventLog[];
+        for (const e of getEvents(openedEvents, "DepositOpened")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "DepositOpened",
+            details: `Giao dịch #${e.args.depositId}, Kế hoạch #${e.args.planId}, Người gửi: ${String(e.args.owner).slice(0, 8)}..., Vốn: ${formatUSDC(e.args.principal)} USDC`,
+            txHash: e.transactionHash,
+          });
         }
-      };
+        for (const e of getEvents(withdrawnEvents, "DepositWithdrawn")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "DepositWithdrawn",
+            details: `Giao dịch #${e.args.depositId}, Vốn: ${formatUSDC(e.args.principal)} USDC, Lãi: ${formatUSDC(e.args.interest)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(earlyWithdrawnEvents, "DepositEarlyWithdrawn")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "DepositEarlyWithdrawn",
+            details: `Giao dịch #${e.args.depositId}, Vốn: ${formatUSDC(e.args.principal)} USDC, Phí phạt: ${formatUSDC(e.args.penalty)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(renewedEvents, "DepositRenewed")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "DepositRenewed",
+            details: `Cũ #${e.args.oldDepositId} → Mới #${e.args.newDepositId}, Vốn: ${formatUSDC(e.args.newPrincipal)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(partialEvents, "DepositPartialEarlyWithdrawn")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "DepositPartialEarlyWithdrawn",
+            details: `Giao dịch #${e.args.depositId}, Rút: ${formatUSDC(e.args.withdrawAmount)} USDC, Phí phạt: ${formatUSDC(e.args.penalty)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(planCreatedEvents, "PlanCreated")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "PlanCreated",
+            details: `Kế hoạch #${e.args.planId}, Kỳ hạn: ${e.args.tenorDays} ngày, Lãi suất: ${Number(e.args.aprBps) / 100}%`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(planAprUpdatedEvents, "PlanAprUpdated")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "PlanAprUpdated",
+            details: `Kế hoạch #${e.args.planId}, Lãi cũ: ${Number(e.args.oldApr) / 100}%, Lãi mới: ${Number(e.args.newApr) / 100}%`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(planEnabledEvents, "PlanEnabled")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "PlanEnabled",
+            details: `Kế hoạch #${e.args.planId}`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(planDisabledEvents, "PlanDisabled")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "PlanDisabled",
+            details: `Kế hoạch #${e.args.planId}`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(vaultFundedEvents, "VaultFunded")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "VaultFunded",
+            details: `Chủ: ${String(e.args.owner).slice(0, 10)}..., Số tiền: ${formatUSDC(e.args.amount)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(vaultWithdrawnEvents, "VaultWithdrawn")) {
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "VaultWithdrawn",
+            details: `Chủ: ${String(e.args.owner).slice(0, 10)}..., Số tiền: ${formatUSDC(e.args.amount)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
+      } else {
+        const depositIds: Set<number> = new Set();
+        if (address) {
+          try {
+            const ids = await core.getUserDeposits(address);
+            for (const id of ids) depositIds.add(Number(id));
+          } catch {}
+        }
 
-      const openedEvents = await safeQuery("DepositOpened", () =>
-        core.queryFilter(core.filters.DepositOpened())
-      );
-      const withdrawnEvents = await safeQuery("DepositWithdrawn", () =>
-        core.queryFilter(core.filters.DepositWithdrawn())
-      );
-      const earlyWithdrawnEvents = await safeQuery("DepositEarlyWithdrawn", () =>
-        core.queryFilter(core.filters.DepositEarlyWithdrawn())
-      );
-      const renewedEvents = await safeQuery("DepositRenewed", () =>
-        core.queryFilter(core.filters.DepositRenewed())
-      );
-      const partialEvents = await safeQuery("DepositPartialEarlyWithdrawn", () =>
-        core.queryFilter(core.filters.DepositPartialEarlyWithdrawn())
-      );
-      const planCreatedEvents = await safeQuery("PlanCreated", () =>
-        core.queryFilter(core.filters.PlanCreated())
-      );
-      const planAprUpdatedEvents = await safeQuery("PlanAprUpdated", () =>
-        core.queryFilter(core.filters.PlanAprUpdated())
-      );
-      const planEnabledEvents = await safeQuery("PlanEnabled", () =>
-        core.queryFilter(core.filters.PlanEnabled())
-      );
-      const planDisabledEvents = await safeQuery("PlanDisabled", () =>
-        core.queryFilter(core.filters.PlanDisabled())
-      );
-      const vaultFundedEvents = await safeQuery("VaultFunded", () =>
-        vm.queryFilter(vm.filters.VaultFunded())
-      );
-      const vaultWithdrawnEvents = await safeQuery("VaultWithdrawn", () =>
-        vm.queryFilter(vm.filters.VaultWithdrawn())
-      );
+        const [openedEvents, withdrawnEvents, earlyWithdrawnEvents, renewedEvents, partialEvents] =
+          await Promise.allSettled([
+            queryAllRanges("DepositOpened", (f, t) =>
+              core.queryFilter(core.filters.DepositOpened(null, null, null), f, t)
+            ),
+            queryAllRanges("DepositWithdrawn", (f, t) =>
+              core.queryFilter(core.filters.DepositWithdrawn(), f, t)
+            ),
+            queryAllRanges("DepositEarlyWithdrawn", (f, t) =>
+              core.queryFilter(core.filters.DepositEarlyWithdrawn(), f, t)
+            ),
+            queryAllRanges("DepositRenewed", (f, t) =>
+              core.queryFilter(core.filters.DepositRenewed(), f, t)
+            ),
+            queryAllRanges("DepositPartialEarlyWithdrawn", (f, t) =>
+              core.queryFilter(core.filters.DepositPartialEarlyWithdrawn(), f, t)
+            ),
+          ]);
 
-      for (const e of openedEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "DepositOpened",
-          details: `Giao dịch #${e.args.depositId}, Kế hoạch #${e.args.planId}, Vốn: ${formatUSDC(e.args.principal)} USDC`,
-          txHash: e.transactionHash,
-        });
-      }
-
-      for (const e of withdrawnEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "DepositWithdrawn",
-          details: `Giao dịch #${e.args.depositId}, Vốn: ${formatUSDC(e.args.principal)} USDC, Lãi: ${formatUSDC(e.args.interest)} USDC`,
-          txHash: e.transactionHash,
-        });
-      }
-
-      for (const e of earlyWithdrawnEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "DepositEarlyWithdrawn",
-          details: `Giao dịch #${e.args.depositId}, Vốn: ${formatUSDC(e.args.principal)} USDC, Phí phạt: ${formatUSDC(e.args.penalty)} USDC`,
-          txHash: e.transactionHash,
-        });
-      }
-
-      for (const e of renewedEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "DepositRenewed",
-          details: `Cũ #${e.args.oldDepositId} → Mới #${e.args.newDepositId}, Vốn: ${formatUSDC(e.args.newPrincipal)} USDC`,
-          txHash: e.transactionHash,
-        });
-      }
-
-      for (const e of partialEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "DepositPartialEarlyWithdrawn",
-          details: `Giao dịch #${e.args.depositId}, Rút: ${formatUSDC(e.args.withdrawAmount)} USDC, Phí phạt: ${formatUSDC(e.args.penalty)} USDC`,
-          txHash: e.transactionHash,
-        });
-      }
-
-      for (const e of planCreatedEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "PlanCreated",
-          details: `Kế hoạch #${e.args.planId}, Kỳ hạn: ${e.args.tenorDays} ngày, Lãi suất: ${Number(e.args.aprBps) / 100}%`,
-          txHash: e.transactionHash,
-        });
-      }
-
-      for (const e of planAprUpdatedEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "PlanAprUpdated",
-          details: `Kế hoạch #${e.args.planId}, Lãi cũ: ${Number(e.args.oldApr) / 100}%, Lãi mới: ${Number(e.args.newApr) / 100}%`,
-          txHash: e.transactionHash,
-        });
-      }
-
-      for (const e of planEnabledEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "PlanEnabled",
-          details: `Kế hoạch #${e.args.planId}`,
-          txHash: e.transactionHash,
-        });
-      }
-
-      for (const e of planDisabledEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "PlanDisabled",
-          details: `Kế hoạch #${e.args.planId}`,
-          txHash: e.transactionHash,
-        });
-      }
-
-      for (const e of vaultFundedEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "VaultFunded",
-          details: `Chủ: ${String(e.args.owner).slice(0, 10)}..., Số tiền: ${formatUSDC(e.args.amount)} USDC`,
-          txHash: e.transactionHash,
-        });
-      }
-
-      for (const e of vaultWithdrawnEvents as ethers.EventLog[]) {
-        allRaw.push({
-          blockNumber: e.blockNumber,
-          eventName: "VaultWithdrawn",
-          details: `Chủ: ${String(e.args.owner).slice(0, 10)}..., Số tiền: ${formatUSDC(e.args.amount)} USDC`,
-          txHash: e.transactionHash,
-        });
+        for (const e of getEvents(openedEvents, "DepositOpened")) {
+          if (e.args.owner.toLowerCase() !== address?.toLowerCase()) continue;
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "DepositOpened",
+            details: `Giao dịch #${e.args.depositId}, Kế hoạch #${e.args.planId}, Vốn: ${formatUSDC(e.args.principal)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(withdrawnEvents, "DepositWithdrawn")) {
+          if (!depositIds.has(Number(e.args.depositId))) continue;
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "DepositWithdrawn",
+            details: `Giao dịch #${e.args.depositId}, Vốn: ${formatUSDC(e.args.principal)} USDC, Lãi: ${formatUSDC(e.args.interest)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(earlyWithdrawnEvents, "DepositEarlyWithdrawn")) {
+          if (!depositIds.has(Number(e.args.depositId))) continue;
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "DepositEarlyWithdrawn",
+            details: `Giao dịch #${e.args.depositId}, Vốn: ${formatUSDC(e.args.principal)} USDC, Phí phạt: ${formatUSDC(e.args.penalty)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(renewedEvents, "DepositRenewed")) {
+          if (!depositIds.has(Number(e.args.oldDepositId))) continue;
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "DepositRenewed",
+            details: `Cũ #${e.args.oldDepositId} → Mới #${e.args.newDepositId}, Vốn: ${formatUSDC(e.args.newPrincipal)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
+        for (const e of getEvents(partialEvents, "DepositPartialEarlyWithdrawn")) {
+          if (!depositIds.has(Number(e.args.depositId))) continue;
+          allRaw.push({
+            blockNumber: e.blockNumber,
+            eventName: "DepositPartialEarlyWithdrawn",
+            details: `Giao dịch #${e.args.depositId}, Rút: ${formatUSDC(e.args.withdrawAmount)} USDC, Phí phạt: ${formatUSDC(e.args.penalty)} USDC`,
+            txHash: e.transactionHash,
+          });
+        }
       }
 
       const uniqueBlocks = [...new Set(allRaw.map((e) => e.blockNumber))];
-      const blockTimestamps: Record<number, number> = {};
-      await Promise.all(
-        uniqueBlocks.map(async (bn) => {
-          try {
-            const block = await provider!.getBlock(bn);
-            if (block) blockTimestamps[bn] = block.timestamp;
-          } catch {
-            // ignore block fetch errors
-          }
-        })
-      );
+      const blockTimestamps = await fetchTimestampsBatched(provider, uniqueBlocks);
 
       const logsWithTime: LogEntry[] = allRaw
         .map((e) => ({
@@ -227,16 +333,16 @@ export default function AuditLog({ provider, isCorrectNetwork }: Props) {
 
       if (failedTypes.length > 0) {
         setPartialErrors([
-          `Tải thất bại: ${failedTypes.join(", ")}. Các sự kiện khác tải thành công.`,
+          `Một số sự kiện tải thất bại: ${failedTypes.join(", ")}. Hãy thử lại sau.`,
         ]);
       }
     } catch (err: any) {
       console.error("Failed to load audit log:", err);
-      setError(err?.message || "Tải nhật ký giao dịch thất bại");
+      setError(err?.message || "Tải nhật ký giao dịch thất bại. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
-  }, [provider, isCorrectNetwork]);
+  }, [provider, isCorrectNetwork, address, isAdmin]);
 
   useEffect(() => {
     fetchLogs();
@@ -258,7 +364,12 @@ export default function AuditLog({ provider, isCorrectNetwork }: Props) {
   return (
     <div className="page">
       <div className="card-header" style={{ marginBottom: "1rem" }}>
-        <h2 className="page-title">Nhật ký giao dịch</h2>
+        <div>
+          <h2 className="page-title">Nhật ký giao dịch</h2>
+          <p className="card-subtitle" style={{ marginTop: "0.25rem" }}>
+            {isAdmin ? "Tất cả giao dịch trên hệ thống" : `Giao dịch của ${address?.slice(0, 6)}...${address?.slice(-4)}`}
+          </p>
+        </div>
         <button
           className="btn-secondary btn-sm"
           onClick={handleRefresh}
@@ -268,11 +379,14 @@ export default function AuditLog({ provider, isCorrectNetwork }: Props) {
         </button>
       </div>
 
-      {loading && <p className="status-message info">Đang tải sự kiện...</p>}
+      {loading && <p className="status-message info">Đang tải sự kiện... (có thể mất vài giây)</p>}
 
       {error && (
         <div className="status-message error" style={{ marginBottom: "1rem" }}>
           {error}
+          <button className="btn-secondary btn-sm" style={{ marginLeft: "1rem" }} onClick={handleRefresh}>
+            Thử lại
+          </button>
         </div>
       )}
 
@@ -284,11 +398,12 @@ export default function AuditLog({ provider, isCorrectNetwork }: Props) {
         </div>
       )}
 
-      {!loading && logs.length === 0 && (
+      {!loading && logs.length === 0 && !error && (
         <div className="card">
           <p className="empty-state">
-            Chưa có sự kiện nào. Các giao dịch gửi, rút và thao tác quỹ sẽ
-            hiển thị tại đây khi có hoạt động trên hợp đồng.
+            {isAdmin
+              ? "Chưa có sự kiện nào trên hệ thống."
+              : "Bạn chưa có giao dịch nào. Hãy gửi tiết kiệm để bắt đầu."}
           </p>
         </div>
       )}

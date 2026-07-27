@@ -35,6 +35,7 @@ export default function Home({
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
   const [vaultHealth, setVaultHealth] = useState<VaultHealth | null>(null);
+  const [totalDepositCount, setTotalDepositCount] = useState(0);
   const [corePaused, setCorePaused] = useState(false);
   const [vmPaused, setVmPaused] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -52,6 +53,7 @@ export default function Home({
 
   const [fundAmount, setFundAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [newFeeReceiver, setNewFeeReceiver] = useState("");
 
   const loadData = useCallback(async () => {
     if (!provider || !isCorrectNetwork) return;
@@ -73,9 +75,10 @@ export default function Home({
         setVaultHealth(vh);
         const core = getSavingCore(provider);
         const vm = getVaultManager(provider);
-        const [cPaused, vPaused] = await Promise.all([core.paused(), vm.paused()]);
+        const [cPaused, vPaused, depCount] = await Promise.all([core.paused(), vm.paused(), core.depositCount()]);
         setCorePaused(cPaused);
         setVmPaused(vPaused);
+        setTotalDepositCount(Number(depCount));
       }
     } catch (err: any) {
       console.error("Failed to load data:", err);
@@ -226,6 +229,24 @@ export default function Home({
     }
   };
 
+  const handleSetFeeReceiver = async () => {
+    if (!signer || !newFeeReceiver) return;
+    if (!ethers.isAddress(newFeeReceiver)) {
+      setTxStatus("Địa chỉ không hợp lệ");
+      return;
+    }
+    try {
+      setTxStatus("Đang cập nhật địa chỉ nhận phí...");
+      const core = getSavingCore(signer);
+      const tx = await core.setFeeReceiver(newFeeReceiver);
+      await tx.wait();
+      setTxStatus("Cập nhật thành công!");
+      setNewFeeReceiver("");
+    } catch (err: any) {
+      setTxStatus(err?.reason || "Giao dịch thất bại");
+    }
+  };
+
   if (!provider || !isCorrectNetwork) {
     return (
       <div className="page">
@@ -259,8 +280,9 @@ export default function Home({
         </div>
       )}
 
-      {/* Stat Cards — User: 3 + Admin: 1 (Rủi ro) */}
+      {/* Stat Cards */}
       <div className="stat-cards" style={{ gridTemplateColumns: isAdmin ? "repeat(4, 1fr)" : "repeat(3, 1fr)" }}>
+        {/* Card 1: Số dư ví — always shown */}
         <div className="stat-card">
           <div className="stat-icon blue">💰</div>
           <div className="stat-info">
@@ -270,25 +292,54 @@ export default function Home({
             </div>
           </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon green">💵</div>
-          <div className="stat-info">
-            <div className="stat-label">Tiết kiệm</div>
-            <div className="stat-value">{activeDeposits.length} khoản</div>
-            <div className="stat-sub">
-              <span><strong>{formatUSDC(totalPrincipal)}</strong> USDC</span>
-            </div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon yellow">📈</div>
-          <div className="stat-info">
-            <div className="stat-label">Lãi ước tính</div>
-            <div className="stat-value green">+{formatUSDC(totalEstInterest)}</div>
-          </div>
-        </div>
 
-        {/* Admin: Rủi ro hệ thống */}
+        {/* Card 2 & 3: Admin vs User */}
+        {isAdmin ? (
+          <>
+            <div className="stat-card">
+              <div className="stat-icon green">📋</div>
+              <div className="stat-info">
+                <div className="stat-label">Tổng số gói</div>
+                <div className="stat-value">{plans.length}</div>
+                <div className="stat-sub">
+                  <span>{plans.filter(p => p.enabled).length} đang mở</span>
+                </div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon yellow">🏦</div>
+              <div className="stat-info">
+                <div className="stat-label">Tổng số khoản gửi</div>
+                <div className="stat-value">{totalDepositCount}</div>
+                <div className="stat-sub">
+                  <span>{activeDeposits.length} đang hoạt động</span>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="stat-card">
+              <div className="stat-icon green">💵</div>
+              <div className="stat-info">
+                <div className="stat-label">Tiết kiệm</div>
+                <div className="stat-value">{activeDeposits.length} khoản</div>
+                <div className="stat-sub">
+                  <span><strong>{formatUSDC(totalPrincipal)}</strong> USDC</span>
+                </div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon yellow">📈</div>
+              <div className="stat-info">
+                <div className="stat-label">Lãi ước tính</div>
+                <div className="stat-value green">+{formatUSDC(totalEstInterest)}</div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Card 4: Rủi ro hệ thống — admin only */}
         {isAdmin && vaultHealth && (() => {
           const vaultBal = Number(formatUSDC(vaultHealth.balance));
           const totalDep = Number(formatUSDC(vaultHealth.totalDeposits));
@@ -624,6 +675,25 @@ export default function Home({
               <p className="help-text" style={{ marginTop: "0.75rem" }}>
                 Tạm dừng sẽ vô hiệu hóa nạp/rút trên hợp đồng tương ứng.
               </p>
+            </div>
+
+            {/* Fee Receiver Management */}
+            <div style={{ marginTop: "1.5rem", paddingTop: "1.5rem", borderTop: "1px solid var(--border, #e5e7eb)" }}>
+              <h4 className="card-title" style={{ fontSize: "0.875rem", marginBottom: "1rem" }}>Địa chỉ nhận phí rút sớm</h4>
+              <div className="form-group">
+                <label>Địa chỉ mới</label>
+                <input
+                  type="text"
+                  value={newFeeReceiver}
+                  onChange={(e) => setNewFeeReceiver(e.target.value)}
+                  placeholder="0x..."
+                  style={{ fontFamily: "monospace", fontSize: "0.8rem" }}
+                />
+                <span className="form-hint">Phí phạt rút sớm sẽ chuyển đến địa chỉ này</span>
+              </div>
+              <button className="btn-primary btn-full" onClick={handleSetFeeReceiver} disabled={!newFeeReceiver}>
+                Cập nhật
+              </button>
             </div>
           </div>
         </div>

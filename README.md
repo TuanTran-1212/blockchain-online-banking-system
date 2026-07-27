@@ -46,7 +46,7 @@ See [architectureDesign.md](./architectureDesign.md) for detailed system archite
 - Owner can mint freely for testing
 - Used as the payment token for deposits
 
-### VaultManager (`0x29b7e818Eaa803111788eFE924ff3682093CA3a8`)
+### VaultManager (`0x1521290278AAa3f9E8eC25866A1DC63B6d48Aa00`)
 
 - Manages liquidity pool for user deposits
 - Owner can fund/withdraw USDC reserves
@@ -54,7 +54,7 @@ See [architectureDesign.md](./architectureDesign.md) for detailed system archite
 - **C2: Tracks `totalOwedInterest` — blocks admin withdraw if vault would be below interest obligations**
 - SavingCore calls `depositToVault`/`withdrawFromVault`/`withdrawInterest`/`recordInterestOwed`/`releaseInterestOwed`
 
-### SavingCore (`0x468864a15B76327f578d0dCb0E544D4C6A1aEC03`)
+### SavingCore (`0x0f21053868fE011919d0d8FacFa0aab1cf72dCDf`)
 
 - Core business logic contract
 - ERC721 NFT certificates ("SavingCertificate" / "SCERT")
@@ -79,7 +79,7 @@ All files          |      100 |    93.33 |      100 |      100 |
 -------------------|----------|----------|----------|----------|
 ```
 
-**Total Tests: 203 — all passing**
+**Total Tests: 219 — all passing**
 
 ### Test Files
 
@@ -101,8 +101,8 @@ All files          |      100 |    93.33 |      100 |      100 |
 | Contract | Address | Deployer |
 |----------|---------|----------|
 | MockUSDC | `0x45BAB50D9DFCE9176A64fA6Ce12Bb9288E2B5269` | `0x6F4431...26492` |
-| VaultManager | `0x29b7e818Eaa803111788eFE924ff3682093CA3a8` | `0x6F4431...26492` |
-| SavingCore | `0x468864a15B76327f578d0dCb0E544D4C6A1aEC03` | `0x6F4431...26492` |
+| VaultManager | `0x1521290278AAa3f9E8eC25866A1DC63B6d48Aa00` | `0x6F4431...26492` |
+| SavingCore | `0x0f21053868fE011919d0d8FacFa0aab1cf72dCDf` | `0x6F4431...26492` |
 
 ---
 
@@ -154,18 +154,30 @@ npx hardhat deploy --network sepolia
 
 ### Q1: NFT có thể transfer không?
 
-**Không — hiện tại NFT bị khóa vì business logic kiểm tra `owner == msg.sender`.**
+**Không — NFT certificate là soulbound (không thể chuyển nhượng).**
 
-ERC721 base (OpenZeppelin) hỗ trợ `transferFrom` / `safeTransferFrom`, nhưng tất cả user functions (`withdrawAtMaturity`, `earlyWithdraw`, `partialEarlyWithdraw`, `renewDeposit`, `autoRenewDeposit`) đều check:
+Ngoài check `dep.owner == msg.sender` trong business logic, contract còn override `_update()` của ERC721:
+
 ```solidity
-require(dep.owner == msg.sender, "Not your deposit");
+function _update(address to, uint256 tokenId, address auth)
+    internal override returns (address)
+{
+    require(
+        auth == address(this) || auth == address(0) || to == address(0),
+        "NFT is non-transferable"
+    );
+    return super._update(to, tokenId, auth);
+}
 ```
 
-Vì `owner` được set lúc `openDeposit` và không bao giờ thay đổi, transferring NFT sang address khác sẽ:
-- Người nhận mới (owner mới ERC721) không thể gọi任何 flow → tiền bị khóa
-- Người gửi cũ mất quyền kiểm tra ERC721 nhưng vẫn giữ quyền trong mapping
+- `auth == address(this)` — cho phép contract internally mint/burn
+- `auth == address(0)` — cho phép initial mint
+- `to == address(0)` — cho phép burn (withdraw/renew)
+- **Bất kỳ `transferFrom`/`safeTransferFrom` nào từ user đều bị block**
 
-**Đây là thiết kế có chủ đích:** NFT chỉ serve as certificate, không phải tradable asset. Nếu cần transfer trong tương lai, cần update mapping owner qua `_transfer` hook.
+**Nếu transfer được thì sao?** Người nhận mới (owner mới ERC721) không thể gọi bất kỳ flow nào vì `dep.owner` trong mapping vẫn là address cũ → tiền bị khóa vĩnh viễn.
+
+**Đây là thiết kế có chủ đích:** NFT chỉ serve as certificate (chứng nhận khoản gửi), không phải tradable asset. Không có logic cần transfer certificate.
 
 ---
 
@@ -198,18 +210,20 @@ Nếu bot chết:
 
 ### Q4: Rounding dust?
 
-**Sử dụng integer division — có thể mất 1 wei dust.**
+**Sử dụng integer division — có thể mất vài wei dust mỗi giao dịch.**
 
 Interest formula:
 ```solidity
 (principal * aprBps * tenorSeconds) / (365 days * 10_000)
 ```
 
-Ví dụ: `100 * 375 * 15552000 / 31536000000 = 187.499...` → Solidity truncate xuống `187` → mất 0.5 USDC (với 6 decimals)
+Ví dụ: `10000 USDC * 375 bps * 180 ngày` = `10000 * 375 * 15552000 / 31536000000 = 184.931...` → Solidity truncate xuống `184` USDC (mất ~0.93 USDC dust).
 
-**Impact:** Dust tích lũy theo thời gian nhưng không đủ significant. Vault có thể có 1-2 wei "extra" không thuộc principal hay interest obligation.
+**Ai giữ dust?** Dust ở lại trong VaultManager contract balance. Vault sẽ có balance cao hơn tổng principal + interest obligation một chút.
 
-**Trade-off:** Solidity không có float. Có thể ceil bằng `+ (denominator - 1)` nhưng sẽ overcharge user. Hiện tại để nguyên — dust chấp nhận được.
+**Có gây revert không?** Không. Dust đủ nhỏ để không ảnh hưởng bất kỳ check solvency hay balance nào.
+
+**Có ảnh hưởng balance không?** Rất ít. Sau hàng nghìn giao dịch, dust tích lũy có thể lên vài USDC — vẫn trong vault, vẫn là tài sản của owner. Nếu cần chính xác tuyệt đối, có thể dùng `mulDiv` của OpenZeppelin (PRBMath) nhưng trade-off là gas cao hơn. Hiện tại integer truncation là chuẩn mực industry.
 
 ---
 
@@ -236,15 +250,15 @@ Nếu gọi chính xác `maturityAt + 3 days`, `block.timestamp == gracePeriodEn
 
 ### Q6: Plan disabled khi deposit đang active?
 
-**Deposit vẫn bình thường — disable chỉ chặn deposits mới.**
+**Deposit vẫn bình thường — disable chỉ chặn deposits mới và auto-renew.**
 
 Khi `disablePlan(planId)`:
-- Deposit hiện tại với plan này vẫn **Active** — tất cả flow hoạt động
+- Deposit hiện tại với plan này vẫn **Active** — tất cả flow (`withdrawAtMaturity`, `earlyWithdraw`, `partialEarlyWithdraw`, `renewDeposit`) hoạt động bình thường
 - `openDeposit()` check `plan.enabled` → revert nếu plan disabled
 - `renewDeposit()` check `plans[newPlanId].enabled` → chỉ validate plan mới
-- `autoRenewDeposit()` dùng `plans[oldDep.planId]` nhưng không check `enabled`
+- `autoRenewDeposit()` check `plans[oldDep.planId].enabled` → **cũng block auto-renew** (`require(currentPlan.enabled, "Plan is disabled")` tại `SavingCore.sol:429`)
 
-**Đây là thiết kế đúng:** Disable plan là business decision — ngừng nhận deposits mới, nhưng existing deposits phải được phục vụ đến maturity.
+**Đây là thiết kế đúng:** Disable plan là business decision — ngừng nhận deposits mới, nhưng existing deposits phải được phục vụ đến maturity. Auto-renew cũng bị chặn vì plan đã disabled.
 
 ---
 

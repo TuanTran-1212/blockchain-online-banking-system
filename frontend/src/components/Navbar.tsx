@@ -1,3 +1,5 @@
+import { getActiveChainId, SEPOLIA_CHAIN_ID, HARDHAT_CHAIN_ID } from "../config/contracts";
+
 interface Props {
   address: string | null;
   isCorrectNetwork: boolean;
@@ -5,6 +7,8 @@ interface Props {
   connect: () => void;
   disconnect: () => void;
   switchToSepolia: () => void;
+  switchToLocalhost: () => void;
+  isLocalhost: boolean;
   activePage: string;
   setActivePage: (page: string) => void;
 }
@@ -16,9 +20,14 @@ export default function Navbar({
   connect,
   disconnect,
   switchToSepolia,
+  switchToLocalhost,
+  isLocalhost,
   activePage,
   setActivePage,
 }: Props) {
+  const chainId = getActiveChainId();
+  const networkName = chainId === HARDHAT_CHAIN_ID ? "Hardhat Local" : chainId === SEPOLIA_CHAIN_ID ? "Sepolia" : "Unknown";
+
   return (
     <nav className="navbar">
       <div className="navbar-brand">
@@ -57,10 +66,20 @@ export default function Navbar({
       <div className="navbar-wallet">
         {address ? (
           <div className="wallet-info">
+            {isCorrectNetwork && (
+              <span className={`tag ${isLocalhost ? "tag-yellow" : "tag-green"}`} style={{ marginRight: "0.5rem", fontSize: "0.7rem" }}>
+                {networkName}
+              </span>
+            )}
             {!isCorrectNetwork && (
-              <button className="btn-warning btn-sm" onClick={switchToSepolia}>
-                Chuyển sang Sepolia
-              </button>
+              <div style={{ display: "flex", gap: "0.35rem" }}>
+                <button className="btn-warning btn-sm" onClick={switchToSepolia}>
+                  Sepolia
+                </button>
+                <button className="btn-secondary btn-sm" onClick={switchToLocalhost}>
+                  Localhost
+                </button>
+              </div>
             )}
             <span className="wallet-address">
               {address.slice(0, 6)}...{address.slice(-4)}

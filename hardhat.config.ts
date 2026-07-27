@@ -6,7 +6,7 @@ import * as dotenv from "dotenv";
 
 dotenv.config();
 
-const { TESTNET_PRIVATE_KEY: testnetPrivateKey } = process.env;
+const { TESTNET_PRIVATE_KEY: testnetPrivateKey, ETHERSCAN_API: etherscanApiKey } = process.env;
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -28,6 +28,9 @@ const config: HardhatUserConfig = {
       chainId: 11155111,
       accounts: [testnetPrivateKey].filter(Boolean),
     },
+  },
+  etherscan: {
+    apiKey: etherscanApiKey,
   },
   namedAccounts: {
     deployer: 0,

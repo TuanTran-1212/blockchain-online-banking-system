@@ -179,9 +179,7 @@ describe("SavingCore — Edge Cases & Comprehensive Tests", function () {
     });
 
     it("should accept deposit of 1 USDC with minDeposit = 0", async function () {
-      // Create plan with minDeposit = 0 (but contract requires > 0)
-      // So test with minDeposit = 1 USDC
-      await savingCore.createPlan(90, 500, ethers.parseUnits("1", 6), 0, 300);
+      await savingCore.createPlan(90, 500, 0, 0, 300);
       const oneUSDC = ethers.parseUnits("1", 6);
       await savingCore.connect(user1).openDeposit(1, oneUSDC);
       const dep = await savingCore.getDeposit(0);
@@ -775,10 +773,10 @@ describe("SavingCore — Edge Cases & Comprehensive Tests", function () {
       ).to.be.revertedWith("Invalid penalty");
     });
 
-    it("should reject createPlan with minDeposit = 0", async function () {
-      await expect(
-        savingCore.createPlan(TENOR_DAYS, APR_BPS, 0, 0, PENALTY_BPS)
-      ).to.be.revertedWith("minDeposit must be > 0");
+    it("should accept createPlan with minDeposit = 0 (no minimum)", async function () {
+      await savingCore.createPlan(TENOR_DAYS, APR_BPS, 0, 0, PENALTY_BPS);
+      const plan = await savingCore.getPlan(0);
+      expect(plan.minDeposit).to.equal(0);
     });
 
     it("should reject updatePlanApr for non-existent plan", async function () {

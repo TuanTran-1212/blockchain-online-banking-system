@@ -12,7 +12,9 @@
     "time-travel": "hardhat run scripts/time-travel.ts",
     "demo:setup": "hardhat run --network sepolia scripts/demo-setup.ts",
     "demo:check": "hardhat run --network sepolia scripts/check-status.ts",
-    "demo:mint-users": "hardhat run --network sepolia scripts/mint-test-users.ts"
+    "demo:mint-users": "hardhat run --network sepolia scripts/mint-test-users.ts",
+    "set-nft-uri": "hardhat run --network sepolia scripts/set-token-uri.ts",
+    "sync-frontend": "hardhat run scripts/sync-frontend.ts"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.1.0"
