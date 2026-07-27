@@ -39,16 +39,20 @@ export default function MyDeposits({
   const [renewPlanId, setRenewPlanId] = useState<{ [depositId: number]: number }>({});
   const [partialAmount, setPartialAmount] = useState<{ [depositId: number]: string }>({});
 
+  const [blockTime, setBlockTime] = useState(Math.floor(Date.now() / 1000));
+
   const loadData = useCallback(async () => {
     if (!provider || !address || !isCorrectNetwork) return;
     setLoading(true);
     try {
-      const [d, p] = await Promise.all([
+      const [d, p, block] = await Promise.all([
         fetchUserDeposits(provider, address),
         fetchPlans(provider),
+        provider.getBlock("latest"),
       ]);
       setDeposits(d);
       setPlans(p);
+      if (block) setBlockTime(block.timestamp);
     } catch (err) {
       console.error("Failed to load deposits:", err);
     } finally {
@@ -154,7 +158,7 @@ export default function MyDeposits({
   const activeDeposits = deposits.filter((d) => d.status === 0);
   const completedDeposits = deposits.filter((d) => d.status !== 0);
 
-  const now = Math.floor(Date.now() / 1000);
+  const now = blockTime;
 
   return (
     <div className="page">

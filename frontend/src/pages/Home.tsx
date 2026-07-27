@@ -311,9 +311,6 @@ export default function Home({
               <div className="stat-info">
                 <div className="stat-label">Tổng số khoản gửi</div>
                 <div className="stat-value">{totalDepositCount}</div>
-                <div className="stat-sub">
-                  <span>{activeDeposits.length} đang hoạt động</span>
-                </div>
               </div>
             </div>
           </>
@@ -476,7 +473,7 @@ export default function Home({
                 <span className="info-value">{(plan.earlyWithdrawPenaltyBps / 100).toFixed(2)}%</span>
               </div>
               <div className="info-row">
-                <span className="info-label">Lãi ước tính (10k USDC)</span>
+                <span className="info-label">Lãi ước tính</span>
                 <span className="info-value green">{formatUSDC(estInterest)} USDC</span>
               </div>
             </div>

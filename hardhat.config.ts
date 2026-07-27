@@ -23,6 +23,11 @@ const config: HardhatUserConfig = {
     hardhat: {
       saveDeployments: true,
     },
+    localhost: {
+      url: "http://127.0.0.1:8545",
+      chainId: 31337,
+      saveDeployments: true,
+    },
     sepolia: {
       url: "https://ethereum-sepolia-rpc.publicnode.com",
       chainId: 11155111,

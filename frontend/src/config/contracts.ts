@@ -3,10 +3,7 @@ import MockUSDC from "../abis/MockUSDC.json";
 import VaultManager from "../abis/VaultManager.json";
 import SavingCore from "../abis/SavingCore.json";
 
-let localAddresses: { MockUSDC?: string; VaultManager?: string; SavingCore?: string } = {};
-try {
-  localAddresses = require("./local-addresses.json");
-} catch {}
+import localAddresses from "./local-addresses.json";
 
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const HARDHAT_CHAIN_ID = 31337;

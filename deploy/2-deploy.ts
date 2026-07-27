@@ -36,15 +36,20 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     autoMine: true,
   });
 
-  // Set SavingCore as authorized caller on VaultManager
-  console.log("========================================");
-  console.log("Linking VaultManager -> SavingCore...");
-  console.log("========================================");
-
+  // Set SavingCore as authorized caller on VaultManager (only if not already set)
   const vm = await ethers.getContractAt("VaultManager", vaultManager.address);
-  const tx = await vm.setSavingCore(savingCore.address);
-  await tx.wait();
-  console.log("VaultManager.setSavingCore(" + savingCore.address + ") ✓");
+  const alreadySet = await vm.savingCoreSet();
+  if (!alreadySet) {
+    console.log("========================================");
+    console.log("Linking VaultManager -> SavingCore...");
+    console.log("========================================");
+
+    const tx = await vm.setSavingCore(savingCore.address);
+    await tx.wait();
+    console.log("VaultManager.setSavingCore(" + savingCore.address + ") ✓");
+  } else {
+    console.log("VaultManager already linked, skipping setSavingCore.");
+  }
 
   console.log("========================================");
   console.log("All contracts deployed and linked!");

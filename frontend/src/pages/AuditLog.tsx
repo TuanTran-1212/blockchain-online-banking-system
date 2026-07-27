@@ -414,7 +414,7 @@ export default function AuditLog({ provider, isCorrectNetwork, address, isAdmin 
             <table className="table">
               <thead>
                 <tr>
-                  <th>Khối #</th>
+                  <th>ID #</th>
                   <th>Sự kiện</th>
                   <th>Chi tiết</th>
                   <th>Thời gian</th>
