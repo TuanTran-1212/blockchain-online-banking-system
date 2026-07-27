@@ -257,6 +257,17 @@ describe("Challenges C2 + C3", function () {
       ).to.be.revertedWithCustomError(savingCore, "EnforcedPause");
     });
 
+    it("should reject partial early withdraw after maturity", async function () {
+      await savingCore.connect(user1).openDeposit(0, DEPOSIT_AMOUNT);
+
+      const dep = await savingCore.getDeposit(0);
+      await time.increaseTo(dep.maturityAt);
+
+      await expect(
+        savingCore.connect(user1).partialEarlyWithdraw(0, DEPOSIT_AMOUNT / 10n)
+      ).to.be.revertedWith("Already matured, use withdrawAtMaturity");
+    });
+
     it("should allow multiple partial withdrawals on same deposit", async function () {
       await savingCore.connect(user1).openDeposit(0, DEPOSIT_AMOUNT);
 

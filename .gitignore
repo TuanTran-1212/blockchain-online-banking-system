@@ -9,3 +9,4 @@ typechain
 data/abi
 deployments/hardhat
 frontend/src/config/local-addresses.json
+answer.md

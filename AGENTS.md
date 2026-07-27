@@ -4,7 +4,7 @@
 
 Hardhat Solidity project: blockchain online banking system with term deposits and ERC721 NFT certificates. Three contracts:
 
-- **MockUSDC** — ERC20, 6 decimals, owner-mintable (test USDC)
+- **MockUSDC** — ERC20, 6 decimals, freely mintable by anyone (test USDC, no access control)
 - **VaultManager** — liquidity pool; owner funds it, SavingCore calls into it
 - **SavingCore** — business logic + ERC721 NFT; inherits ERC721, Ownable, Pausable, ReentrancyGuard
 
@@ -90,3 +90,7 @@ cd frontend && npm run lint     # oxlint
 
 - No burn on MockUSDC
 - No CI/CD pipelines
+
+## Mentor Feedback
+
+See `answer.md` for Q&A responses to mentor evaluation (design decisions, spec compliance, code quality).

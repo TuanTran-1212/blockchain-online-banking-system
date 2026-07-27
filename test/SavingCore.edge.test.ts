@@ -308,11 +308,23 @@ describe("SavingCore — Edge Cases & Comprehensive Tests", function () {
       await savingCore.connect(user1).openDeposit(0, DEPOSIT_AMOUNT);
 
       const dep = await savingCore.getDeposit(0);
-      await time.increaseTo(dep.maturityAt - 1n);
+      // Use -2n because Hardhat auto-mining adds 1 second per block
+      await time.increaseTo(dep.maturityAt - 2n);
 
       // Still counts as early withdraw
       await savingCore.connect(user1).earlyWithdraw(0);
       expect((await savingCore.getDeposit(0)).status).to.equal(1);
+    });
+
+    it("should reject early withdraw after maturity", async function () {
+      await savingCore.connect(user1).openDeposit(0, DEPOSIT_AMOUNT);
+
+      const dep = await savingCore.getDeposit(0);
+      await time.increaseTo(dep.maturityAt);
+
+      await expect(
+        savingCore.connect(user1).earlyWithdraw(0)
+      ).to.be.revertedWith("Already matured, use withdrawAtMaturity");
     });
 
     it("should burn NFT after early withdraw", async function () {

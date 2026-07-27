@@ -30,24 +30,13 @@ describe("MockUSDC", function () {
       const balance = await mockUSDC.balanceOf(owner.address);
       expect(balance).to.equal(INITIAL_MINT);
     });
-
-    it("should set deployer as owner", async function () {
-      expect(await mockUSDC.owner()).to.equal(owner.address);
-    });
   });
 
   describe("Minting", function () {
-    it("should allow owner to mint tokens", async function () {
+    it("should allow anyone to mint tokens", async function () {
       const mintAmount = ethers.parseUnits("1000", 6);
-      await mockUSDC.mint(addr1.address, mintAmount);
-      expect(await mockUSDC.balanceOf(addr1.address)).to.equal(mintAmount);
-    });
-
-    it("should revert when non-owner tries to mint", async function () {
-      const mintAmount = ethers.parseUnits("1000", 6);
-      await expect(
-        mockUSDC.connect(addr1).mint(addr2.address, mintAmount)
-      ).to.be.revertedWithCustomError(mockUSDC, "OwnableUnauthorizedAccount");
+      await mockUSDC.connect(addr1).mint(addr2.address, mintAmount);
+      expect(await mockUSDC.balanceOf(addr2.address)).to.equal(mintAmount);
     });
 
     it("should update totalSupply after minting", async function () {

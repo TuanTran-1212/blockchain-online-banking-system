@@ -21,6 +21,7 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
 
     IERC20 public immutable usdc;
     address public savingCore; // Authorized caller for callback functions
+    bool public savingCoreSet; // Prevent setting savingCore multiple times
     uint256 public totalDeposits;     // Sum of all user deposits tracked
     uint256 public totalOwedInterest; // Total interest owed to active deposits (C2: Solvency Guard)
 
@@ -45,13 +46,15 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Set or update the authorized SavingCore address
+     * @dev Set the authorized SavingCore address (one-time only)
      *      Must be called after both contracts are deployed
      */
     function setSavingCore(address _savingCore) external onlyOwner {
+        require(!savingCoreSet, "SavingCore already set");
         require(_savingCore != address(0), "Invalid address");
-        emit SavingCoreUpdated(savingCore, _savingCore);
         savingCore = _savingCore;
+        savingCoreSet = true;
+        emit SavingCoreUpdated(address(0), _savingCore);
     }
 
     // ========================
@@ -120,6 +123,7 @@ contract VaultManager is Ownable, Pausable, ReentrancyGuard {
      */
     function withdrawInterest(address to, uint256 amount) external onlySavingCore nonReentrant whenNotPaused {
         require(amount > 0, "Amount must be > 0");
+        require(totalOwedInterest >= amount, "Exceeds total owed interest");
         require(
             usdc.balanceOf(address(this)) >= totalDeposits + amount,
             "Insufficient vault balance for interest"

@@ -86,9 +86,16 @@ describe("VaultManager — Edge Cases", function () {
     });
 
     it("should reject setSavingCore with zero address", async function () {
+      const freshVM = await (await ethers.getContractFactory("VaultManager")).deploy(await mockUSDC.getAddress());
       await expect(
-        vaultManager.setSavingCore(ethers.ZeroAddress)
+        freshVM.setSavingCore(ethers.ZeroAddress)
       ).to.be.revertedWith("Invalid address");
+    });
+
+    it("should reject setSavingCore when already set", async function () {
+      await expect(
+        vaultManager.setSavingCore(addr1.address)
+      ).to.be.revertedWith("SavingCore already set");
     });
   });
 
@@ -224,6 +231,7 @@ describe("VaultManager — Edge Cases", function () {
       const interest = ethers.parseUnits("1000", 6);
 
       await vaultManager.depositToVault(deposit);
+      await vaultManager.recordInterestOwed(interest);
 
       const balBefore = await mockUSDC.balanceOf(addr1.address);
       await vaultManager.withdrawInterest(addr1.address, interest);
@@ -236,6 +244,7 @@ describe("VaultManager — Edge Cases", function () {
     it("should reject if vault balance insufficient for interest", async function () {
       // Fund 100k, deposit 100k → no free balance for interest
       await vaultManager.depositToVault(FUND_AMOUNT);
+      await vaultManager.recordInterestOwed(1);
 
       await expect(
         vaultManager.withdrawInterest(addr1.address, 1)
@@ -245,9 +254,10 @@ describe("VaultManager — Edge Cases", function () {
     it("should allow interest withdrawal when vault has reserves", async function () {
       // Fund 100k, deposit 50k → 50k free for interest
       const deposit = ethers.parseUnits("50000", 6);
-      await vaultManager.depositToVault(deposit);
-
       const interest = ethers.parseUnits("10000", 6);
+      await vaultManager.depositToVault(deposit);
+      await vaultManager.recordInterestOwed(interest);
+
       await vaultManager.withdrawInterest(addr1.address, interest);
 
       expect(await vaultManager.totalDeposits()).to.equal(deposit);

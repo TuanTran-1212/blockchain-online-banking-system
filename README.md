@@ -43,7 +43,7 @@ See [architectureDesign.md](./architectureDesign.md) for detailed system archite
 ### MockUSDC (`0x45BAB50D9DFCE9176A64fA6Ce12Bb9288E2B5269`)
 
 - ERC20 token with 6 decimals (simulates USDC)
-- Owner can mint freely for testing
+- Anyone can mint freely (test-only faucet pattern)
 - Used as the payment token for deposits
 
 ### VaultManager (`0x1521290278AAa3f9E8eC25866A1DC63B6d48Aa00`)
@@ -79,13 +79,13 @@ All files          |      100 |    93.33 |      100 |      100 |
 -------------------|----------|----------|----------|----------|
 ```
 
-**Total Tests: 219 — all passing**
+**Total Tests: 217 — all passing**
 
 ### Test Files
 
 | File | Tests | Coverage Focus |
 |------|-------|---------------|
-| MockUSDC.test.ts | 8 | ERC20, mint, transfer |
+| MockUSDC.test.ts | 6 | ERC20, mint, transfer |
 | VaultManager.test.ts | 14 | Fund, withdraw, solvency |
 | VaultManager.edge.test.ts | 28 | Boundary, events, access |
 | SavingCore.test.ts | 27 | 5 flows, plans, interest |
@@ -336,7 +336,7 @@ project/
 |   +-- 1-deploy.ts           Deploy MockUSDC
 |   +-- 2-deploy.ts           Deploy VaultManager + SavingCore
 +-- test/
-|   +-- MockUSDC.test.ts      MockUSDC tests (8)
+|   +-- MockUSDC.test.ts      MockUSDC tests (6)
 |   +-- VaultManager.test.ts  VaultManager tests (14)
 |   +-- VaultManager.edge.test.ts  VaultManager edge cases (28)
 |   +-- SavingCore.test.ts    SavingCore tests (27)

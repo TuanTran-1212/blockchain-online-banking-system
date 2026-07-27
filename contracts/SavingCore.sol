@@ -235,15 +235,15 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         // Calculate simple interest
         uint256 interest = calculateInterest(dep.principal, dep.aprBpsAtOpen, dep.maturityAt - dep.startAt);
 
-        // C2: Release interest obligation
-        if (interest > 0) {
-            vaultManager.releaseInterestOwed(interest);
-        }
-
         // Withdraw principal from tracked deposits, interest from vault reserves
         vaultManager.withdrawFromVault(msg.sender, dep.principal);
         if (interest > 0) {
             vaultManager.withdrawInterest(msg.sender, interest);
+        }
+
+        // C2: Release interest obligation (after withdrawInterest so totalOwedInterest self-check passes)
+        if (interest > 0) {
+            vaultManager.releaseInterestOwed(interest);
         }
 
         dep.status = DepositStatus.Withdrawn;
@@ -264,6 +264,7 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         Deposit storage dep = deposits[depositId];
         require(dep.owner == msg.sender, "Not your deposit");
         require(dep.status == DepositStatus.Active, "Not active");
+        require(block.timestamp < dep.maturityAt, "Already matured, use withdrawAtMaturity");
 
         // C2: Release interest obligation (no interest paid on early withdraw)
         uint256 expectedInterest = calculateInterest(dep.principal, dep.aprBpsAtOpen, dep.maturityAt - dep.startAt);
@@ -302,6 +303,7 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
         Deposit storage dep = deposits[depositId];
         require(dep.owner == msg.sender, "Not your deposit");
         require(dep.status == DepositStatus.Active, "Not active");
+        require(block.timestamp < dep.maturityAt, "Already matured, use withdrawAtMaturity");
         require(withdrawAmount > 0 && withdrawAmount <= dep.principal, "Invalid withdraw amount");
 
         // Penalty on withdrawn amount only
@@ -556,9 +558,4 @@ contract SavingCore is ERC721, Ownable, Pausable, ReentrancyGuard {
     function unpause() external onlyOwner {
         _unpause();
     }
-
-    // ========================
-    // Receive (for any accidental ERC20 transfers)
-    // ========================
-    receive() external payable {}
 }
